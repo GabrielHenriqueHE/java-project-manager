@@ -55,5 +55,6 @@ specs/
 
 ## Fases
 
-- **Fase 1 — Fundação** (`phases/phase-1-fundacao/`): estrutura de specs, modelo de domínio, interface de adapter + `MavenAdapter.infer_structure`, scaffold Textual navegável em modo leitura. Ver `phases/phase-1-fundacao/requirements.md`.
-- Fases futuras (a detalhar quando a Fase 1 estiver concluída): mutações reais de módulo (`add_module`/`remove_module`), edição de metadados e dependências pela TUI, definição/aplicação de estrutura de diretórios customizada, suporte a Gradle.
+- **Fase 1 — Fundação** (`phases/phase-1-fundacao/`, concluída): estrutura de specs, modelo de domínio, interface de adapter + `MavenAdapter.infer_structure`, scaffold Textual navegável em modo leitura.
+- **Fase 2 — Mutações** (em andamento): primeira fatia concluída em `phases/phase-2-remover-modulo/` (`remove_module` de ponta a ponta, com detecção de dependentes). Fatias seguintes: `add_module`, `update_dependency`, `update_metadata`.
+- Fases futuras: edição de estrutura de diretórios customizada pela TUI, suporte a Gradle.
