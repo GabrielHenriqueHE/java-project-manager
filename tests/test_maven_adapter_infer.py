@@ -91,13 +91,13 @@ def test_infer_structure_raises_clear_error_for_malformed_pom():
 
 @pytest.mark.parametrize(
     "method_name",
-    ["add_module", "remove_module", "update_dependency", "update_metadata"],
+    ["add_module", "update_dependency", "update_metadata"],
 )
 def test_mutation_methods_are_not_implemented_yet(method_name):
     adapter = MavenAdapter()
     method = getattr(adapter, method_name)
     with pytest.raises(NotImplementedError):
-        if method_name in {"add_module", "remove_module"}:
+        if method_name == "add_module":
             method(None, None)
         else:
             method(None, None, None)
