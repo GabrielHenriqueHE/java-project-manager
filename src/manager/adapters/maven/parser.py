@@ -3,6 +3,7 @@ from pathlib import Path
 
 from lxml import etree
 
+from manager.adapters.maven.xml_utils import namespace_of
 from manager.models import Dependency, ProjectMetadata
 
 
@@ -37,7 +38,7 @@ class MavenPomParser:
             raise ValueError(f"pom.xml invalido em {pom_path}: {exc}") from exc
 
         root = tree.getroot()
-        ns = self._namespace(root)
+        ns = namespace_of(root)
 
         parent_el = root.find(f"{ns}parent")
         parent = None
@@ -95,13 +96,6 @@ class MavenPomParser:
             managed_dependencies=managed_dependencies,
             module_names=module_names,
         )
-
-    @staticmethod
-    def _namespace(root: etree._Element) -> str:
-        if root.tag.startswith("{"):
-            uri = root.tag[1 : root.tag.index("}")]
-            return f"{{{uri}}}"
-        return ""
 
     @staticmethod
     def _text(parent: etree._Element, tag: str, ns: str) -> str | None:
