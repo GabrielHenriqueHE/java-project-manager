@@ -23,3 +23,29 @@ def remove_element_preserving_whitespace(elem: etree._Element) -> None:
     else:
         parent.text = elem.tail
     parent.remove(elem)
+
+
+def append_with_matching_indent(
+    container: etree._Element, new_child: etree._Element
+) -> None:
+    """Anexa new_child como ultimo filho de container, reproduzindo o padrao de
+    indentacao (tail/text) ja usado pelos filhos existentes, para nao deixar a
+    nova entrada colada ou com indentacao diferente das demais.
+    """
+    existing_children = list(container)
+    if not existing_children:
+        opening_text = container.text or "\n"
+        container.append(new_child)
+        new_child.tail = opening_text
+        return
+
+    last = existing_children[-1]
+    item_separator = (
+        existing_children[0].tail
+        if len(existing_children) > 1
+        else (container.text or "\n")
+    )
+    closing_tail = last.tail
+    container.append(new_child)
+    new_child.tail = closing_tail
+    last.tail = item_separator
