@@ -3,18 +3,29 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Static, Tree
 
+from manager.adapters.base import DependentModuleConflict
 from manager.models import Module, Project
+from manager.screens.widgets.confirm_dialog import ConfirmModal
 from manager.screens.widgets.project_tree import ProjectTree
+from manager.services.adapters_registry import detect_adapter
 
 
 class ProjectDetailScreen(Screen):
-    """Mostra a arvore de modulos de um projeto inferido, em modo leitura."""
+    """Mostra a arvore de modulos de um projeto inferido.
 
-    BINDINGS = [("escape", "app.pop_screen", "Voltar")]
+    Leitura de metadados/dependencias/estrutura de diretorios; remocao de
+    modulo e a unica mutacao suportada nesta fase.
+    """
+
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Voltar"),
+        ("r", "remove_selected_module", "Remover modulo"),
+    ]
 
     def __init__(self, project: Project):
         super().__init__()
         self._project = project
+        self._selected_module: Module = project.root_module
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -30,7 +41,53 @@ class ProjectDetailScreen(Screen):
     def on_tree_node_selected(self, event: Tree.NodeSelected[Module]) -> None:
         module = event.node.data
         if module is not None:
+            self._selected_module = module
             self._show_module(module)
+
+    def action_remove_selected_module(self) -> None:
+        module_name = self._selected_module.name
+        adapter = detect_adapter(self._project.root_path)
+        if adapter is None:
+            self.notify(
+                "Nao foi possivel detectar a build tool do projeto", severity="error"
+            )
+            return
+
+        try:
+            updated = adapter.remove_module(self._project, module_name)
+        except DependentModuleConflict as conflict:
+            dependents = ", ".join(conflict.dependents)
+            message = (
+                f"'{module_name}' e dependencia de: {dependents}.\n"
+                "Remover mesmo assim (as dependencias correspondentes tambem serao removidas)?"
+            )
+
+            def _on_confirm(confirmed: bool | None) -> None:
+                if confirmed:
+                    self._force_remove(adapter, module_name)
+
+            self.app.push_screen(ConfirmModal(message), _on_confirm)
+            return
+        except ValueError as exc:
+            self.notify(str(exc), severity="error")
+            return
+
+        self._apply_updated_project(updated)
+
+    def _force_remove(self, adapter, module_name: str) -> None:
+        try:
+            updated = adapter.remove_module(self._project, module_name, force=True)
+        except ValueError as exc:
+            self.notify(str(exc), severity="error")
+            return
+        self._apply_updated_project(updated)
+
+    def _apply_updated_project(self, updated: Project) -> None:
+        self._project = updated
+        self._selected_module = updated.root_module
+        self.query_one("#project-tree", ProjectTree).refresh_project(updated)
+        self._show_module(updated.root_module)
+        self.notify("Modulo removido")
 
     def _show_module(self, module: Module) -> None:
         meta = module.metadata

@@ -30,6 +30,13 @@ class ProjectTree(Tree[Module]):
         self._populate(self.root, self._project.root_module)
         self.root.expand()
 
+    def refresh_project(self, project: Project) -> None:
+        """Reconstroi a arvore inteira a partir de um Project atualizado."""
+        self._project = project
+        self.reset(project.name, data=project.root_module)
+        self._populate(self.root, project.root_module)
+        self.root.expand()
+
     def _populate(self, node: TreeNode[Module], module: Module) -> None:
         node.data = module
         for submodule in module.submodules:
