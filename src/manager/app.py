@@ -1,6 +1,6 @@
 from textual.app import App
 
-from manager.screens.dashboard import DashboardScreen
+from manager.screens.main_screen import MainScreen
 
 
 class ManagerApp(App):
@@ -9,7 +9,7 @@ class ManagerApp(App):
     TITLE = "Java Project Manager"
 
     def on_mount(self) -> None:
-        self.push_screen(DashboardScreen())
+        self.push_screen(MainScreen())
 
 
 def main() -> None:
