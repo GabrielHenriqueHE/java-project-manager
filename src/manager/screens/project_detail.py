@@ -6,6 +6,7 @@ from textual.widgets import Footer, Header, Static, Tree
 from manager.adapters.base import DependentModuleConflict
 from manager.models import Module, Project
 from manager.screens.widgets.confirm_dialog import ConfirmModal
+from manager.screens.widgets.module_form import ModuleFormScreen
 from manager.screens.widgets.project_tree import ProjectTree
 from manager.services.adapters_registry import detect_adapter
 
@@ -19,6 +20,7 @@ class ProjectDetailScreen(Screen):
 
     BINDINGS = [
         ("escape", "app.pop_screen", "Voltar"),
+        ("a", "add_module", "Adicionar modulo"),
         ("r", "remove_selected_module", "Remover modulo"),
     ]
 
@@ -43,6 +45,31 @@ class ProjectDetailScreen(Screen):
         if module is not None:
             self._selected_module = module
             self._show_module(module)
+
+    def action_add_module(self) -> None:
+        parent = self._selected_module
+        adapter = detect_adapter(self._project.root_path)
+        if adapter is None:
+            self.notify(
+                "Nao foi possivel detectar a build tool do projeto", severity="error"
+            )
+            return
+
+        def _on_submit(module: Module | None) -> None:
+            if module is None:
+                return
+            try:
+                updated = adapter.add_module(
+                    self._project, module, parent_name=parent.name
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self._apply_updated_project(
+                updated, message=f"Modulo '{module.name}' criado"
+            )
+
+        self.app.push_screen(ModuleFormScreen(), _on_submit)
 
     def action_remove_selected_module(self) -> None:
         module_name = self._selected_module.name
@@ -72,7 +99,7 @@ class ProjectDetailScreen(Screen):
             self.notify(str(exc), severity="error")
             return
 
-        self._apply_updated_project(updated)
+        self._apply_updated_project(updated, message="Modulo removido")
 
     def _force_remove(self, adapter, module_name: str) -> None:
         try:
@@ -80,14 +107,14 @@ class ProjectDetailScreen(Screen):
         except ValueError as exc:
             self.notify(str(exc), severity="error")
             return
-        self._apply_updated_project(updated)
+        self._apply_updated_project(updated, message="Modulo removido")
 
-    def _apply_updated_project(self, updated: Project) -> None:
+    def _apply_updated_project(self, updated: Project, *, message: str) -> None:
         self._project = updated
         self._selected_module = updated.root_module
         self.query_one("#project-tree", ProjectTree).refresh_project(updated)
         self._show_module(updated.root_module)
-        self.notify("Modulo removido")
+        self.notify(message)
 
     def _show_module(self, module: Module) -> None:
         meta = module.metadata
