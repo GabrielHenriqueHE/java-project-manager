@@ -89,15 +89,9 @@ def test_infer_structure_raises_clear_error_for_malformed_pom():
         MavenAdapter().infer_structure(MALFORMED)
 
 
-@pytest.mark.parametrize(
-    "method_name",
-    ["add_module", "update_dependency", "update_metadata"],
-)
+@pytest.mark.parametrize("method_name", ["update_dependency", "update_metadata"])
 def test_mutation_methods_are_not_implemented_yet(method_name):
     adapter = MavenAdapter()
     method = getattr(adapter, method_name)
     with pytest.raises(NotImplementedError):
-        if method_name == "add_module":
-            method(None, None)
-        else:
-            method(None, None, None)
+        method(None, None, None)

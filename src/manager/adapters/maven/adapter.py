@@ -78,7 +78,76 @@ class MavenAdapter(BuildToolAdapter):
     def add_module(
         self, project: Project, module: Module, *, parent_name: str | None = None
     ) -> Project:
-        raise NotImplementedError("add_module chega na Fase 2")
+        root_path = project.root_path
+
+        if parent_name is None:
+            parent = project.root_module
+        else:
+            parent = self._find_module(project.root_module, parent_name)
+            if parent is None:
+                raise ValueError(
+                    f"Modulo pai '{parent_name}' nao encontrado no projeto"
+                )
+
+        if parent.metadata.packaging != "pom":
+            raise ValueError(
+                f"Modulo pai '{parent.name}' precisa ter packaging 'pom' para "
+                "receber novos modulos"
+            )
+
+        artifact_id = module.metadata.artifact_id
+        if self._find_module(project.root_module, artifact_id) is not None:
+            raise ValueError(f"Ja existe um modulo chamado '{artifact_id}' no projeto")
+
+        parent_dir = root_path / parent.relative_path
+        module_dir = parent_dir / artifact_id
+        if module_dir.exists():
+            raise ValueError(f"O diretorio '{module_dir}' ja existe")
+
+        group_id = (
+            module.metadata.group_id
+            if module.metadata.group_id
+            and module.metadata.group_id != parent.metadata.group_id
+            else None
+        )
+        version = (
+            module.metadata.version
+            if module.metadata.version
+            and module.metadata.version != parent.metadata.version
+            else None
+        )
+
+        self._writer.create_pom(
+            module_dir / "pom.xml",
+            parent_group_id=parent.metadata.group_id or "",
+            parent_artifact_id=parent.metadata.artifact_id,
+            parent_version=parent.metadata.version or "",
+            artifact_id=artifact_id,
+            group_id=group_id,
+            version=version,
+            packaging=module.metadata.packaging,
+            name=module.metadata.name,
+            description=module.metadata.description,
+            dependencies=module.dependencies,
+        )
+
+        directory_structure = module.directory_structure
+        all_dirs = {
+            *directory_structure.source_dirs,
+            *directory_structure.test_dirs,
+            *directory_structure.resource_dirs,
+            *directory_structure.test_resource_dirs,
+        }
+        for rel_dir in all_dirs:
+            (module_dir / rel_dir).mkdir(parents=True, exist_ok=True)
+
+        parent_pom = root_path / parent.build_file.path
+        if not self._writer.add_module_entry(parent_pom, artifact_id):
+            raise ValueError(
+                f"O pom de '{parent.name}' nao possui uma secao <modules> existente"
+            )
+
+        return self.infer_structure(root_path)
 
     def remove_module(
         self, project: Project, module_name: str, *, force: bool = False
