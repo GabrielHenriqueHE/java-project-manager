@@ -274,6 +274,91 @@ async def test_structure_panel_recreate_existing_directory_is_a_no_op(
         assert screen.project is project_after_create
 
 
+async def test_structure_panel_creates_custom_directory(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+
+        await pilot.press("n")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "DirectoryFormScreen"
+        form.query_one("#field-path", Input).value = "src/main/proto"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        created_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "proto"
+        )
+        assert created_dir.is_dir()
+
+
+async def test_structure_panel_custom_directory_form_rejects_empty_path(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert type(app.screen).__name__ == "DirectoryFormScreen"
+
+
+async def test_structure_panel_custom_directory_cancel_does_not_change_anything(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+        project_before = screen.project
+
+        await pilot.press("5")
+        await pilot.pause()
+        await pilot.press("n")
+        await pilot.pause()
+
+        await pilot.click("#form-cancel")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is project_before
+
+
 async def test_command_mode_creates_module_and_can_be_cancelled(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
