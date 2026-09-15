@@ -192,12 +192,7 @@ class MavenAdapter(BuildToolAdapter):
         if target is None:
             raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
 
-        module_dir = (project.root_path / target.relative_path).resolve()
-        target_path = (module_dir / relative_path).resolve()
-        if module_dir not in (target_path, *target_path.parents):
-            raise ValueError(
-                f"'{relative_path}' escapa do diretorio do modulo '{target.name}'"
-            )
+        target_path = self._resolve_module_relative_path(project, target, relative_path)
 
         if target_path.exists():
             raise ValueError(f"'{relative_path}' ja existe")
@@ -205,6 +200,40 @@ class MavenAdapter(BuildToolAdapter):
         target_path.mkdir(parents=True)
 
         return self.infer_structure(project.root_path)
+
+    def remove_directory(
+        self, project: Project, module_name: str, relative_path: Path
+    ) -> Project:
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        target_path = self._resolve_module_relative_path(project, target, relative_path)
+
+        module_dir = (project.root_path / target.relative_path).resolve()
+        if target_path == module_dir:
+            raise ValueError("Nao e possivel remover o diretorio raiz do modulo")
+
+        if not target_path.exists():
+            raise ValueError(f"'{relative_path}' nao existe")
+
+        if any(target_path.iterdir()):
+            raise ValueError(f"'{relative_path}' nao esta vazio")
+
+        target_path.rmdir()
+
+        return self.infer_structure(project.root_path)
+
+    def _resolve_module_relative_path(
+        self, project: Project, target: Module, relative_path: Path
+    ) -> Path:
+        module_dir = (project.root_path / target.relative_path).resolve()
+        target_path = (module_dir / relative_path).resolve()
+        if module_dir not in (target_path, *target_path.parents):
+            raise ValueError(
+                f"'{relative_path}' escapa do diretorio do modulo '{target.name}'"
+            )
+        return target_path
 
     def _find_module(self, module: Module, name: str) -> Module | None:
         if module.name == name:
