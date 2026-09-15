@@ -187,6 +187,93 @@ async def test_structure_panel_toggle_active_module(project_root, tmp_path):
         assert first_active != second_active
 
 
+async def test_structure_panel_creates_checklist_directory(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        created_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+        assert created_dir.is_dir()
+
+
+async def test_structure_panel_checklist_navigation_selects_different_item(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+
+        await pilot.press("j")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        created_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "resources"
+        )
+        assert created_dir.is_dir()
+        not_created = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+        assert not not_created.is_dir()
+
+
+async def test_structure_panel_recreate_existing_directory_is_a_no_op(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+
+        await pilot.press("enter")
+        await pilot.pause()
+        project_after_create = screen.project
+
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert screen.project is project_after_create
+
+
 async def test_command_mode_creates_module_and_can_be_cancelled(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
