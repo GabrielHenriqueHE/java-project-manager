@@ -268,6 +268,20 @@ class MainScreen(Screen):
 
         self.app.push_screen(DependencyFormScreen(), _on_submit)
 
+    def remove_dependency(self, dependency: Dependency) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        try:
+            updated = self._adapter.remove_dependency(
+                self.project, dependency.group_id, dependency.artifact_id
+            )
+        except ValueError as exc:
+            self.notify(str(exc), severity="error")
+            return
+        self.notify(f"Dependencia '{dependency.artifact_id}' removida")
+        self.set_project(updated)
+
     def add_directory(self, module: Module, relative_path: str) -> None:
         if self.project is None or self._adapter is None:
             self.notify("Nenhum projeto selecionado", severity="error")
