@@ -362,3 +362,35 @@ class MavenAdapter(BuildToolAdapter):
         )
 
         return self.infer_structure(project.root_path)
+
+    def remove_dependency(
+        self, project: Project, group_id: str, artifact_id: str
+    ) -> Project:
+        owner = self._find_managed_dependency_owner(
+            project.root_module, group_id, artifact_id
+        )
+        if owner is None:
+            raise ValueError(
+                f"Dependencia gerenciada '{group_id}:{artifact_id}' nao encontrada"
+            )
+
+        pom_path = project.root_path / owner.build_file.path
+        self._writer.remove_managed_dependency(pom_path, group_id, artifact_id)
+
+        return self.infer_structure(project.root_path)
+
+    def _find_managed_dependency_owner(
+        self, module: Module, group_id: str, artifact_id: str
+    ) -> Module | None:
+        for dep in module.dependencies:
+            if (
+                dep.managed
+                and dep.group_id == group_id
+                and dep.artifact_id == artifact_id
+            ):
+                return module
+        for sub in module.submodules:
+            found = self._find_managed_dependency_owner(sub, group_id, artifact_id)
+            if found is not None:
+                return found
+        return None
