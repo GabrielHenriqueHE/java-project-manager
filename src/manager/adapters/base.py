@@ -53,3 +53,13 @@ class BuildToolAdapter(ABC):
         self, project: Project, module_name: str, metadata: ProjectMetadata
     ) -> Project:
         """Atualiza os metadados de um modulo."""
+
+    @abstractmethod
+    def add_directory(
+        self, project: Project, module_name: str, relative_path: Path
+    ) -> Project:
+        """Cria relative_path (relativo a raiz do modulo) em disco.
+
+        Levanta ValueError se o modulo nao existir, se o diretorio ja
+        existir, ou se relative_path escapar do diretorio do modulo.
+        """
