@@ -63,3 +63,14 @@ class BuildToolAdapter(ABC):
         Levanta ValueError se o modulo nao existir, se o diretorio ja
         existir, ou se relative_path escapar do diretorio do modulo.
         """
+
+    @abstractmethod
+    def remove_directory(
+        self, project: Project, module_name: str, relative_path: Path
+    ) -> Project:
+        """Remove relative_path (relativo a raiz do modulo) do disco, se vazio.
+
+        Levanta ValueError se o modulo nao existir, se relative_path
+        escapar do diretorio do modulo, se o diretorio nao existir, ou
+        se nao estiver vazio. Nunca remove recursivamente.
+        """
