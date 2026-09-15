@@ -13,6 +13,7 @@ from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
 from manager.screens.widgets.command_bar import CommandBar
 from manager.screens.widgets.confirm_dialog import ConfirmModal
+from manager.screens.widgets.metadata_form import MetadataFormScreen
 from manager.screens.widgets.metadata_panel import MetadataPanel
 from manager.screens.widgets.module_form import ModuleFormScreen
 from manager.screens.widgets.modules_panel import ModulesPanel
@@ -223,6 +224,26 @@ class MainScreen(Screen):
             self.set_project(updated)
 
         _do_remove(force=False)
+
+    def update_metadata(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+
+        def _on_submit(metadata: ProjectMetadata | None) -> None:
+            if metadata is None:
+                return
+            try:
+                updated = self._adapter.update_metadata(
+                    self.project, module.name, metadata
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify("Metadados atualizados")
+            self.set_project(updated)
+
+        self.app.push_screen(MetadataFormScreen(module), _on_submit)
 
     # ---- navegacao entre paineis ----
 

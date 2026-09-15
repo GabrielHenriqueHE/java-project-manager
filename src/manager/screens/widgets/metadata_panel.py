@@ -14,6 +14,7 @@ class MetadataPanel(Panel):
 
     def __init__(self, **kwargs):
         super().__init__(2, "METADADOS", **kwargs)
+        self._module: Module | None = None
 
     def compose_body(self) -> ComposeResult:
         yield Static(
@@ -27,6 +28,7 @@ class MetadataPanel(Panel):
         self.refresh_module(None)
 
     def refresh_module(self, module: Module | None) -> None:
+        self._module = module
         body = self.query_one("#metadata-body", Static)
         if module is None:
             body.set_classes("panel-empty-state")
@@ -52,7 +54,7 @@ class MetadataPanel(Panel):
         body.update("\n".join(lines))
 
     def action_edit(self) -> None:
-        self.notify(
-            "Edicao de metadados ainda nao implementada (Fase 2 seguinte)",
-            severity="warning",
-        )
+        if self._module is None:
+            self.notify("Nenhum modulo selecionado", severity="error")
+            return
+        self.screen.update_metadata(self._module)
