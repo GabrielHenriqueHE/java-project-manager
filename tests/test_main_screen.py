@@ -274,6 +274,98 @@ async def test_structure_panel_recreate_existing_directory_is_a_no_op(
         assert screen.project is project_after_create
 
 
+async def test_structure_panel_removes_empty_checklist_directory(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+        created_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert created_dir.is_dir()
+
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert not created_dir.is_dir()
+
+
+async def test_structure_panel_remove_non_empty_directory_shows_error(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        # root(0) -> bom(1) -> core(2); "core" ja tem src/main/java com
+        # Core.java (nao vazio).
+        await pilot.press("space")
+        await pilot.press("space")
+        await pilot.pause()
+        active_module = panel._modules[panel._active_index]
+        target_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+        assert active_module.name == "core"
+        project_before = screen.project
+
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert target_dir.is_dir()
+        assert screen.project is project_before
+
+
+async def test_structure_panel_remove_missing_directory_is_a_no_op(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        project_before = screen.project
+
+        await pilot.press("d")
+        await pilot.pause()
+
+        assert screen.project is project_before
+
+
 async def test_structure_panel_creates_custom_directory(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
