@@ -8,4 +8,6 @@ Fase 1 entregou apenas os **stubs** da interface (`add_module`/`remove_module`/`
 
 **`update_metadata` implementado** na Fase 2 (`specs/phases/phase-2-update-metadata/`): funcional de ponta a ponta no `MavenAdapter` (herança de groupId/version, artifactId somente-leitura, packaging protegido em módulos com submódulos/BOM) e na TUI (Painel [2] METADADOS, binding `enter` + `MetadataFormScreen`).
 
-Ainda como stub (`NotImplementedError`): `update_dependency` — fica para a fatia seguinte da Fase 2.
+**`update_dependency` implementado** na Fase 2 (`specs/phases/phase-2-update-dependency/`): funcional de ponta a ponta no `MavenAdapter` (upsert de dependências gerenciadas/diretas por `groupId:artifactId`) e na TUI (Painel [4] BOM + DEPENDÊNCIAS, binding `n` + `DependencyFormScreen`, sempre gerenciada/BOM no módulo selecionado no Painel [3]).
+
+Todas as mutações previstas para a Fase 2 (`add_module`, `remove_module`, `update_metadata`, `update_dependency`) estão implementadas.
