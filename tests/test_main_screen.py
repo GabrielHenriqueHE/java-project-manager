@@ -237,6 +237,92 @@ async def test_bom_panel_shows_managed_dependencies(project_root, tmp_path):
         assert bom_panel.query_one("#bom-empty").display is False
 
 
+async def test_update_metadata_via_panel(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("2")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "MetadataFormScreen"
+        form.query_one("#field-description", Input).value = "Descricao nova"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project.root_module.metadata.description == "Descricao nova"
+        pom_text = (project_root / "pom.xml").read_text()
+        assert "<description>Descricao nova</description>" in pom_text
+
+
+async def test_update_metadata_cancel_does_not_change_anything(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+        original_description = screen.project.root_module.metadata.description
+
+        await pilot.press("2")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        await pilot.click("#form-cancel")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project.root_module.metadata.description == original_description
+
+
+async def test_update_metadata_adapter_error_shows_notification(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+        lv = screen.query_one("#modules-list", ListView)
+        lv.index = 1  # root(0) -> bom(1)
+        await pilot.pause()
+        assert screen.selected_module.name == "multi-module-demo-bom"
+
+        await pilot.press("2")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "MetadataFormScreen"
+        form.query_one("#field-packaging", Input).value = "jar"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.selected_module.name == "multi-module-demo-bom"
+        assert screen.project.root_module.metadata.packaging == "pom"
+
+
 async def test_remove_project_clears_state(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
