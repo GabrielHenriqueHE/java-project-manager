@@ -109,6 +109,7 @@ class StructurePanel(Panel):
         ("j", "cursor_down", "mover"),
         ("k", "cursor_up", "mover"),
         ("enter", "create_selected", "criar"),
+        ("n", "add_custom_directory", "novo"),
     ]
 
     def __init__(self, **kwargs):
@@ -193,3 +194,9 @@ class StructurePanel(Panel):
         active_module = self._modules[self._active_index]
         relative_path = _CHECKLIST_DIRS[self._checklist_index]
         self.screen.add_directory(active_module, relative_path)
+
+    def action_add_custom_directory(self) -> None:
+        if not self._modules:
+            return
+        active_module = self._modules[self._active_index]
+        self.screen.add_custom_directory(active_module)

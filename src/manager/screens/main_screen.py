@@ -14,6 +14,7 @@ from manager.screens.widgets.bom_panel import BomPanel
 from manager.screens.widgets.command_bar import CommandBar
 from manager.screens.widgets.confirm_dialog import ConfirmModal
 from manager.screens.widgets.dependency_form import DependencyFormScreen
+from manager.screens.widgets.directory_form import DirectoryFormScreen
 from manager.screens.widgets.metadata_form import MetadataFormScreen
 from manager.screens.widgets.metadata_panel import MetadataPanel
 from manager.screens.widgets.module_form import ModuleFormScreen
@@ -281,6 +282,18 @@ class MainScreen(Screen):
             return
         self.notify(f"'{relative_path}' criado")
         self.set_project(updated)
+
+    def add_custom_directory(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+
+        def _on_submit(relative_path: str | None) -> None:
+            if relative_path is None:
+                return
+            self.add_directory(module, relative_path)
+
+        self.app.push_screen(DirectoryFormScreen(), _on_submit)
 
     # ---- navegacao entre paineis ----
 
