@@ -239,4 +239,55 @@ class MavenAdapter(BuildToolAdapter):
     def update_metadata(
         self, project: Project, module_name: str, metadata: ProjectMetadata
     ) -> Project:
-        raise NotImplementedError("update_metadata chega na Fase 2")
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if metadata.artifact_id != target.metadata.artifact_id:
+            raise ValueError("Renomear artifactId nao e suportado")
+
+        if (
+            metadata.packaging != "pom"
+            and metadata.packaging != target.metadata.packaging
+            and (target.submodules or target.is_bom)
+        ):
+            raise ValueError(
+                f"Modulo '{target.name}' tem submodulos ou e o BOM do projeto; "
+                "packaging precisa continuar 'pom'"
+            )
+
+        parent = self._find_parent(project.root_module, target)
+        if parent is None:
+            if not metadata.group_id or not metadata.version:
+                raise ValueError(
+                    "Modulo raiz nao tem <parent> para herdar: "
+                    "groupId e version sao obrigatorios"
+                )
+            group_id = metadata.group_id
+            version = metadata.version
+        else:
+            group_id = (
+                metadata.group_id
+                if metadata.group_id and metadata.group_id != parent.metadata.group_id
+                else None
+            )
+            version = (
+                metadata.version
+                if metadata.version and metadata.version != parent.metadata.version
+                else None
+            )
+
+        java_version = metadata.properties.get("maven.compiler.source") or None
+
+        pom_path = project.root_path / target.build_file.path
+        self._writer.update_metadata(
+            pom_path,
+            group_id=group_id,
+            version=version,
+            name=metadata.name,
+            description=metadata.description,
+            packaging=metadata.packaging,
+            java_version=java_version,
+        )
+
+        return self.infer_structure(project.root_path)
