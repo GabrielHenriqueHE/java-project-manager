@@ -11,3 +11,7 @@ Fase 1 entregou apenas os **stubs** da interface (`add_module`/`remove_module`/`
 **`update_dependency` implementado** na Fase 2 (`specs/phases/phase-2-update-dependency/`): funcional de ponta a ponta no `MavenAdapter` (upsert de dependências gerenciadas/diretas por `groupId:artifactId`) e na TUI (Painel [4] BOM + DEPENDÊNCIAS, binding `n` + `DependencyFormScreen`, sempre gerenciada/BOM no módulo selecionado no Painel [3]).
 
 Todas as mutações previstas para a Fase 2 (`add_module`, `remove_module`, `update_metadata`, `update_dependency`) estão implementadas.
+
+**`remove_dependency` implementado** na Fase 5 (`specs/phases/phase-5-remover-dependencia/`): novo método na interface `BuildToolAdapter`, remove uma dependência gerenciada (BOM) identificada por `groupId:artifactId` em qualquer módulo que a declare, reaproveitando o `MavenPomWriter.remove_managed_dependency` já existente desde a Fase 2. TUI: Painel [4], binding `d`.
+
+Ainda fora de escopo: adicionar/editar dependência **direta** (`managed=False`) de um módulo qualquer pela TUI — sem painel para isso no layout atual.

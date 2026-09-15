@@ -38,5 +38,6 @@ uv run pytest
 - **Fase 2 — Mutações** (concluída): `add_module`, `remove_module` (com detecção de módulos dependentes), `update_metadata` (herança de groupId/version, artifactId somente-leitura) e `update_dependency` (upsert de dependências gerenciadas/diretas) implementados de ponta a ponta.
 - **Fase 3 — TUI**: layout de painel único com 3 colunas/5 painéis (`src/manager/screens/main_screen.py` + `src/manager/screens/widgets/`), substituindo o fluxo de telas separadas das fases anteriores.
 - **Fase 4 — Estrutura de Diretórios** (em andamento): `add_directory`/`remove_directory` criam/removem em disco os itens do checklist do Painel [5] ESTRUTURA (navegue com `j`/`k`, `enter` cria, `d` remove se vazio) ou um caminho customizado digitado via `n` (só criação).
+- **Fase 5 — Remover Dependência** (concluída): `remove_dependency` remove uma entrada gerenciada (BOM) do Painel [4] (`d` sobre a entrada destacada).
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.
