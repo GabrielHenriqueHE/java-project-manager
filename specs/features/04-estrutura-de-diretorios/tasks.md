@@ -4,4 +4,6 @@ Coberto parcialmente pela **Fase 1** (modelo `DirectoryStructure`/`DirectoryNode
 
 **Criação de diretório em disco implementada** na Fase 4 (`specs/phases/phase-4-estrutura-diretorios/`): `BuildToolAdapter.add_directory` funcional de ponta a ponta no `MavenAdapter` (só I/O de filesystem, sem tocar em `pom.xml`) e na TUI (Painel [5] ESTRUTURA, checklist navegável com `j`/`k` + `enter` cria o item destacado).
 
-Ainda fora de escopo: caminho de diretório livre digitado pelo usuário, edição de `DirectoryNode.role`, remoção de diretórios, e registro de diretórios não-padrão no `pom.xml` (ex.: `build-helper-maven-plugin`) — ficam para fatias futuras.
+**Diretório customizado (caminho livre) implementado** na segunda fatia da Fase 4 (`specs/phases/phase-4-diretorio-customizado/`): binding `n` no Painel [5] abre um formulário de caminho relativo livre, reaproveitando sem nenhuma mudança o `MavenAdapter.add_directory`/`MainScreen.add_directory` já existentes.
+
+Ainda fora de escopo: edição de `DirectoryNode.role`, remoção de diretórios, e registro de diretórios não-padrão no `pom.xml` (ex.: `build-helper-maven-plugin`) — ficam para fatias futuras.
