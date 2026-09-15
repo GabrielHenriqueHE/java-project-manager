@@ -1,5 +1,21 @@
 from lxml import etree
 
+POM_ELEMENT_ORDER = [
+    "modelVersion",
+    "parent",
+    "groupId",
+    "artifactId",
+    "version",
+    "packaging",
+    "name",
+    "description",
+    "properties",
+    "dependencyManagement",
+    "dependencies",
+    "modules",
+    "build",
+]
+
 
 def namespace_of(root: etree._Element) -> str:
     """Retorna o prefixo de namespace (ex.: '{http://maven.apache.org/POM/4.0.0}') de um elemento raiz."""
@@ -49,3 +65,44 @@ def append_with_matching_indent(
     container.append(new_child)
     new_child.tail = closing_tail
     last.tail = item_separator
+
+
+def ensure_child_in_order(
+    container: etree._Element,
+    tag: str,
+    ns: str,
+    order: list[str] = POM_ELEMENT_ORDER,
+) -> etree._Element:
+    """Retorna o filho <tag> de container, criando-o se necessario.
+
+    Ao criar, insere na posicao correta segundo `order` (a ordem exigida
+    pelo XSD do POM 4.0.0) em vez de apenas dar `append` no final, o que
+    produziria um pom.xml invalido caso `tag` deva vir antes de algum
+    elemento ja existente.
+    """
+    existing = container.find(f"{ns}{tag}")
+    if existing is not None:
+        return existing
+
+    new_el = etree.Element(f"{ns}{tag}")
+    target_idx = order.index(tag)
+
+    next_sibling = next(
+        (
+            child
+            for child in container
+            if etree.QName(child).localname in order
+            and order.index(etree.QName(child).localname) > target_idx
+        ),
+        None,
+    )
+
+    if next_sibling is None:
+        append_with_matching_indent(container, new_el)
+        return new_el
+
+    previous = next_sibling.getprevious()
+    separator = previous.tail if previous is not None else container.text
+    next_sibling.addprevious(new_el)
+    new_el.tail = separator
+    return new_el
