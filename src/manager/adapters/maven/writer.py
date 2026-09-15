@@ -4,10 +4,13 @@ from lxml import etree
 
 from manager.adapters.maven.xml_utils import (
     append_with_matching_indent,
+    ensure_child_in_order,
     namespace_of,
     remove_element_preserving_whitespace,
 )
 from manager.models import Dependency
+
+JAVA_VERSION_PROPERTIES = ("maven.compiler.source", "maven.compiler.target")
 
 POM_NS = "http://maven.apache.org/POM/4.0.0"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -122,6 +125,71 @@ class MavenPomWriter:
             etree.SubElement(dep_el, f"{{{POM_NS}}}version").text = dependency.version
         if dependency.scope:
             etree.SubElement(dep_el, f"{{{POM_NS}}}scope").text = dependency.scope
+
+    def update_metadata(
+        self,
+        pom_path: Path,
+        *,
+        group_id: str | None,
+        version: str | None,
+        name: str | None,
+        description: str | None,
+        packaging: str,
+        java_version: str | None,
+    ) -> None:
+        """Atualiza os metadados escalares de um modulo (nao mexe em artifactId).
+
+        Cada campo opcional (`group_id`, `version`, `name`, `description`) e
+        gravado quando truthy e removido quando vazio/None; `packaging` e
+        sempre gravado explicitamente. `java_version` atualiza (ou remove) o
+        par de properties `maven.compiler.source`/`maven.compiler.target`.
+        """
+        tree, root, ns = self._parse(pom_path)
+
+        self._set_or_remove_scalar(root, "groupId", group_id, ns)
+        self._set_or_remove_scalar(root, "version", version, ns)
+        ensure_child_in_order(root, "packaging", ns).text = packaging
+        self._set_or_remove_scalar(root, "name", name, ns)
+        self._set_or_remove_scalar(root, "description", description, ns)
+        self._set_java_version(root, java_version, ns)
+
+        self._write(tree, pom_path)
+
+    @staticmethod
+    def _set_or_remove_scalar(
+        root: etree._Element, tag: str, value: str | None, ns: str
+    ) -> None:
+        if value:
+            ensure_child_in_order(root, tag, ns).text = value
+            return
+        existing = root.find(f"{ns}{tag}")
+        if existing is not None:
+            remove_element_preserving_whitespace(existing)
+
+    @staticmethod
+    def _set_java_version(
+        root: etree._Element, java_version: str | None, ns: str
+    ) -> None:
+        properties_el = root.find(f"{ns}properties")
+
+        if java_version:
+            properties_el = ensure_child_in_order(root, "properties", ns)
+            for prop_tag in JAVA_VERSION_PROPERTIES:
+                prop_el = properties_el.find(f"{ns}{prop_tag}")
+                if prop_el is None:
+                    prop_el = etree.Element(f"{ns}{prop_tag}")
+                    append_with_matching_indent(properties_el, prop_el)
+                prop_el.text = java_version
+            return
+
+        if properties_el is None:
+            return
+        for prop_tag in JAVA_VERSION_PROPERTIES:
+            prop_el = properties_el.find(f"{ns}{prop_tag}")
+            if prop_el is not None:
+                remove_element_preserving_whitespace(prop_el)
+        if len(properties_el) == 0:
+            remove_element_preserving_whitespace(properties_el)
 
     def remove_module_entry(self, pom_path: Path, module_value: str) -> bool:
         tree, root, ns = self._parse(pom_path)
