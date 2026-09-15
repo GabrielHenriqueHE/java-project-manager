@@ -234,7 +234,28 @@ class MavenAdapter(BuildToolAdapter):
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency
     ) -> Project:
-        raise NotImplementedError("update_dependency chega na Fase 2")
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if not dependency.group_id or not dependency.artifact_id:
+            raise ValueError("groupId e artifactId sao obrigatorios")
+
+        if dependency.managed:
+            if target.metadata.packaging != "pom":
+                raise ValueError(
+                    f"Modulo '{target.name}' precisa ter packaging 'pom' para "
+                    "receber uma dependencia gerenciada"
+                )
+            if not dependency.version:
+                raise ValueError(
+                    "version e obrigatoria para uma dependencia gerenciada"
+                )
+
+        pom_path = project.root_path / target.build_file.path
+        self._writer.update_dependency(pom_path, dependency)
+
+        return self.infer_structure(project.root_path)
 
     def update_metadata(
         self, project: Project, module_name: str, metadata: ProjectMetadata
