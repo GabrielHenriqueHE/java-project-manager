@@ -185,6 +185,27 @@ class MavenAdapter(BuildToolAdapter):
 
         return self.infer_structure(root_path)
 
+    def add_directory(
+        self, project: Project, module_name: str, relative_path: Path
+    ) -> Project:
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        module_dir = (project.root_path / target.relative_path).resolve()
+        target_path = (module_dir / relative_path).resolve()
+        if module_dir not in (target_path, *target_path.parents):
+            raise ValueError(
+                f"'{relative_path}' escapa do diretorio do modulo '{target.name}'"
+            )
+
+        if target_path.exists():
+            raise ValueError(f"'{relative_path}' ja existe")
+
+        target_path.mkdir(parents=True)
+
+        return self.infer_structure(project.root_path)
+
     def _find_module(self, module: Module, name: str) -> Module | None:
         if module.name == name:
             return module
