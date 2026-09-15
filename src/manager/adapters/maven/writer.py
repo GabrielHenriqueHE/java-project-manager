@@ -3,6 +3,7 @@ from pathlib import Path
 from lxml import etree
 
 from manager.adapters.maven.xml_utils import (
+    POM_ELEMENT_ORDER,
     append_with_matching_indent,
     ensure_child_in_order,
     namespace_of,
@@ -11,6 +12,14 @@ from manager.adapters.maven.xml_utils import (
 from manager.models import Dependency
 
 JAVA_VERSION_PROPERTIES = ("maven.compiler.source", "maven.compiler.target")
+DEPENDENCY_CHILD_ORDER = [
+    "groupId",
+    "artifactId",
+    "version",
+    "type",
+    "classifier",
+    "scope",
+]
 
 POM_NS = "http://maven.apache.org/POM/4.0.0"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -116,15 +125,34 @@ class MavenPomWriter:
     def _append_dependency_element(
         self, deps_el: etree._Element, dependency: Dependency
     ) -> None:
-        dep_el = etree.SubElement(deps_el, f"{{{POM_NS}}}dependency")
+        """Monta um <dependency> desanexado e o anexa a deps_el.
+
+        Constroi o elemento desanexado (em vez de SubElement direto em
+        deps_el) para poder indentar seus filhos internamente via
+        `etree.indent` apos anexado, sem depender de um `etree.indent(tree)`
+        global no chamador (que reformataria o pom.xml inteiro em edicoes
+        pontuais como `update_dependency`; `create_pom` ja faz esse indent
+        global no final, entao aqui e redundante mas inofensivo para ele).
+        """
+        dep_el = etree.Element(f"{{{POM_NS}}}dependency")
         etree.SubElement(dep_el, f"{{{POM_NS}}}groupId").text = dependency.group_id
         etree.SubElement(dep_el, f"{{{POM_NS}}}artifactId").text = (
             dependency.artifact_id
         )
         if dependency.version:
             etree.SubElement(dep_el, f"{{{POM_NS}}}version").text = dependency.version
+        if dependency.type:
+            etree.SubElement(dep_el, f"{{{POM_NS}}}type").text = dependency.type
+        if dependency.classifier:
+            etree.SubElement(dep_el, f"{{{POM_NS}}}classifier").text = (
+                dependency.classifier
+            )
         if dependency.scope:
             etree.SubElement(dep_el, f"{{{POM_NS}}}scope").text = dependency.scope
+
+        append_with_matching_indent(deps_el, dep_el)
+        depth = sum(1 for _ in dep_el.iterancestors())
+        etree.indent(dep_el, space="  ", level=depth)
 
     def update_metadata(
         self,
@@ -157,14 +185,76 @@ class MavenPomWriter:
 
     @staticmethod
     def _set_or_remove_scalar(
-        root: etree._Element, tag: str, value: str | None, ns: str
+        root: etree._Element,
+        tag: str,
+        value: str | None,
+        ns: str,
+        order: list[str] = POM_ELEMENT_ORDER,
     ) -> None:
         if value:
-            ensure_child_in_order(root, tag, ns).text = value
+            ensure_child_in_order(root, tag, ns, order).text = value
             return
         existing = root.find(f"{ns}{tag}")
         if existing is not None:
             remove_element_preserving_whitespace(existing)
+
+    def update_dependency(self, pom_path: Path, dependency: Dependency) -> None:
+        """Adiciona ou atualiza (upsert por groupId:artifactId) uma <dependency>.
+
+        Escreve em <dependencyManagement><dependencies> se
+        `dependency.managed`, senao em <dependencies> direto do modulo.
+        Cria as secoes ausentes respeitando a ordem do XSD do POM.
+        """
+        tree, root, ns = self._parse(pom_path)
+
+        if dependency.managed:
+            dep_mgmt_el = ensure_child_in_order(root, "dependencyManagement", ns)
+            deps_el = ensure_child_in_order(dep_mgmt_el, "dependencies", ns)
+        else:
+            deps_el = ensure_child_in_order(root, "dependencies", ns)
+
+        existing = self._find_dependency_element(
+            deps_el, ns, dependency.group_id, dependency.artifact_id
+        )
+        if existing is None:
+            self._append_dependency_element(deps_el, dependency)
+        else:
+            self._set_or_remove_scalar(
+                existing, "version", dependency.version, ns, DEPENDENCY_CHILD_ORDER
+            )
+            self._set_or_remove_scalar(
+                existing, "type", dependency.type, ns, DEPENDENCY_CHILD_ORDER
+            )
+            self._set_or_remove_scalar(
+                existing,
+                "classifier",
+                dependency.classifier,
+                ns,
+                DEPENDENCY_CHILD_ORDER,
+            )
+            self._set_or_remove_scalar(
+                existing, "scope", dependency.scope, ns, DEPENDENCY_CHILD_ORDER
+            )
+
+        self._write(tree, pom_path)
+
+    @staticmethod
+    def _find_dependency_element(
+        deps_el: etree._Element, ns: str, group_id: str, artifact_id: str
+    ) -> etree._Element | None:
+        for dep_el in deps_el.findall(f"{ns}dependency"):
+            group_el = dep_el.find(f"{ns}groupId")
+            artifact_el = dep_el.find(f"{ns}artifactId")
+            if (
+                group_el is not None
+                and group_el.text
+                and group_el.text.strip() == group_id
+                and artifact_el is not None
+                and artifact_el.text
+                and artifact_el.text.strip() == artifact_id
+            ):
+                return dep_el
+        return None
 
     @staticmethod
     def _set_java_version(
