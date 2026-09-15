@@ -7,12 +7,13 @@ from textual.screen import Screen
 from textual.widgets import Footer, ListView, Static
 
 from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
-from manager.models import BuildFile, Module, Project, ProjectMetadata
+from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
 from manager.screens.import_project import ImportProjectScreen
 from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
 from manager.screens.widgets.command_bar import CommandBar
 from manager.screens.widgets.confirm_dialog import ConfirmModal
+from manager.screens.widgets.dependency_form import DependencyFormScreen
 from manager.screens.widgets.metadata_form import MetadataFormScreen
 from manager.screens.widgets.metadata_panel import MetadataPanel
 from manager.screens.widgets.module_form import ModuleFormScreen
@@ -244,6 +245,27 @@ class MainScreen(Screen):
             self.set_project(updated)
 
         self.app.push_screen(MetadataFormScreen(module), _on_submit)
+
+    def add_dependency(self) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        target_module = self.selected_module or self.project.root_module
+
+        def _on_submit(dependency: Dependency | None) -> None:
+            if dependency is None:
+                return
+            try:
+                updated = self._adapter.update_dependency(
+                    self.project, target_module.name, dependency
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify(f"Dependencia '{dependency.artifact_id}' registrada")
+            self.set_project(updated)
+
+        self.app.push_screen(DependencyFormScreen(), _on_submit)
 
     # ---- navegacao entre paineis ----
 

@@ -82,7 +82,4 @@ class BomPanel(Panel):
         self.query_one("#bom-list", ListView).action_cursor_up()
 
     def action_add_dependency(self) -> None:
-        self.notify(
-            "Adicionar dependencia ainda nao implementado (Fase 2 seguinte)",
-            severity="warning",
-        )
+        self.screen.add_dependency()
