@@ -57,6 +57,6 @@ specs/
 ## Fases
 
 - **Fase 1 — Fundação** (`phases/phase-1-fundacao/`, concluída): estrutura de specs, modelo de domínio, interface de adapter + `MavenAdapter.infer_structure`, scaffold Textual navegável em modo leitura.
-- **Fase 2 — Mutações** (em andamento): fatias concluídas em `phases/phase-2-remover-modulo/` (`remove_module`, com detecção de dependentes) e `phases/phase-2-add-module/` (`add_module`, com criação de diretório/pom e herança de groupId/version). Fatias seguintes: `update_dependency`, `update_metadata`.
+- **Fase 2 — Mutações** (em andamento): fatias concluídas em `phases/phase-2-remover-modulo/` (`remove_module`, com detecção de dependentes), `phases/phase-2-add-module/` (`add_module`, com criação de diretório/pom e herança de groupId/version) e `phases/phase-2-update-metadata/` (`update_metadata`, com herança de groupId/version e artifactId somente-leitura). Fatia seguinte: `update_dependency`.
 - **Fase 3 — Reformulação da TUI** (`phases/phase-3-redesign-tui/`, concluída): o layout de telas separadas (Dashboard → Import → ProjectDetail) da Fase 1-2 foi substituído por um layout de painel único com 3 colunas e 5 painéis simultâneos ("mvnforge"), especificado em `design/tui-layout.md`. Nenhuma mudança na camada de domínio/adapters/services — apenas na apresentação.
 - Fases futuras: edição de estrutura de diretórios customizada pela TUI, suporte a Gradle.
