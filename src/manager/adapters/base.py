@@ -1,7 +1,14 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from manager.models import BuildTool, Dependency, Module, Project, ProjectMetadata
+from manager.models import (
+    BuildTool,
+    Dependency,
+    DirectoryRole,
+    Module,
+    Project,
+    ProjectMetadata,
+)
 
 
 class DependentModuleConflict(Exception):
@@ -83,4 +90,21 @@ class BuildToolAdapter(ABC):
         (group_id, artifact_id), em qualquer modulo do projeto que a declare.
 
         Levanta ValueError se nenhum modulo tiver essa dependencia gerenciada.
+        """
+
+    @abstractmethod
+    def register_directory_role(
+        self,
+        project: Project,
+        module_name: str,
+        relative_path: Path,
+        role: DirectoryRole,
+    ) -> Project:
+        """Registra relative_path como fonte/recurso extra no arquivo de build.
+
+        role precisa ser um de: source, test-source, resource,
+        test-resource ('other' e invalido). Levanta ValueError se o
+        modulo nao existir, se role for invalido, ou se o diretorio
+        ainda nao existir em disco (precisa ser criado antes via
+        add_directory).
         """

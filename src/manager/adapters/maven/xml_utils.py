@@ -50,9 +50,16 @@ def append_with_matching_indent(
     """
     existing_children = list(container)
     if not existing_children:
-        opening_text = container.text or "\n"
+        # container esta vazio (sem filhos ainda, ex.: <plugins> recem-criado
+        # por ensure_child_in_order): container.text e container.tail nao tem
+        # nenhum padrao de indentacao existente para copiar, entao calculamos
+        # a indentacao pela profundidade real de container na arvore (contar
+        # ancestrais), em vez de assumir "\n" sem espacos - senao o filho fica
+        # colado na tag de abertura (ex.: "<build><plugins>").
+        depth = sum(1 for _ in container.iterancestors()) + 1
+        container.text = "\n" + "  " * depth
         container.append(new_child)
-        new_child.tail = opening_text
+        new_child.tail = "\n" + "  " * (depth - 1)
         return
 
     last = existing_children[-1]

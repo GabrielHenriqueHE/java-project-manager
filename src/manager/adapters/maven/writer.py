@@ -9,7 +9,7 @@ from manager.adapters.maven.xml_utils import (
     namespace_of,
     remove_element_preserving_whitespace,
 )
-from manager.models import Dependency
+from manager.models import Dependency, DirectoryRole
 
 JAVA_VERSION_PROPERTIES = ("maven.compiler.source", "maven.compiler.target")
 DEPENDENCY_CHILD_ORDER = [
@@ -20,6 +20,16 @@ DEPENDENCY_CHILD_ORDER = [
     "classifier",
     "scope",
 ]
+
+BUILD_HELPER_GROUP_ID = "org.codehaus.mojo"
+BUILD_HELPER_ARTIFACT_ID = "build-helper-maven-plugin"
+BUILD_HELPER_VERSION = "3.6.0"
+_ROLE_GOAL_PHASE: dict[DirectoryRole, tuple[str, str]] = {
+    "source": ("add-source", "generate-sources"),
+    "test-source": ("add-test-source", "generate-test-sources"),
+    "resource": ("add-resource", "generate-resources"),
+    "test-resource": ("add-test-resource", "generate-test-resources"),
+}
 
 POM_NS = "http://maven.apache.org/POM/4.0.0"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -254,6 +264,90 @@ class MavenPomWriter:
                 and artifact_el.text.strip() == artifact_id
             ):
                 return dep_el
+        return None
+
+    def register_directory_role(
+        self, pom_path: Path, relative_path: str, role: DirectoryRole
+    ) -> None:
+        """Registra relative_path como fonte/recurso extra via
+        build-helper-maven-plugin. Idempotente: chamar de novo com o
+        mesmo (role, relative_path) nao duplica a <execution> nem
+        reescreve o arquivo.
+        """
+        goal, phase = _ROLE_GOAL_PHASE[role]
+        execution_id = f"add-{role}-" + relative_path.replace("/", "-")
+
+        tree, root, ns = self._parse(pom_path)
+        build_el = ensure_child_in_order(root, "build", ns)
+        plugins_el = ensure_child_in_order(build_el, "plugins", ns, order=["plugins"])
+
+        plugin_el = self._find_plugin_element(
+            plugins_el, ns, BUILD_HELPER_GROUP_ID, BUILD_HELPER_ARTIFACT_ID
+        )
+        if plugin_el is None:
+            plugin_el = etree.Element(f"{ns}plugin")
+            etree.SubElement(plugin_el, f"{ns}groupId").text = BUILD_HELPER_GROUP_ID
+            etree.SubElement(plugin_el, f"{ns}artifactId").text = (
+                BUILD_HELPER_ARTIFACT_ID
+            )
+            etree.SubElement(plugin_el, f"{ns}version").text = BUILD_HELPER_VERSION
+            append_with_matching_indent(plugins_el, plugin_el)
+            depth = sum(1 for _ in plugin_el.iterancestors())
+            etree.indent(plugin_el, space="  ", level=depth)
+
+        executions_el = ensure_child_in_order(
+            plugin_el, "executions", ns, order=["executions"]
+        )
+
+        if self._find_execution_element(executions_el, ns, execution_id) is not None:
+            return
+
+        execution_el = etree.Element(f"{ns}execution")
+        etree.SubElement(execution_el, f"{ns}id").text = execution_id
+        etree.SubElement(execution_el, f"{ns}phase").text = phase
+        goals_el = etree.SubElement(execution_el, f"{ns}goals")
+        etree.SubElement(goals_el, f"{ns}goal").text = goal
+        config_el = etree.SubElement(execution_el, f"{ns}configuration")
+        if role in ("source", "test-source"):
+            sources_el = etree.SubElement(config_el, f"{ns}sources")
+            etree.SubElement(sources_el, f"{ns}source").text = relative_path
+        else:
+            resources_el = etree.SubElement(config_el, f"{ns}resources")
+            resource_el = etree.SubElement(resources_el, f"{ns}resource")
+            etree.SubElement(resource_el, f"{ns}directory").text = relative_path
+
+        append_with_matching_indent(executions_el, execution_el)
+        depth = sum(1 for _ in execution_el.iterancestors())
+        etree.indent(execution_el, space="  ", level=depth)
+
+        self._write(tree, pom_path)
+
+    @staticmethod
+    def _find_plugin_element(
+        plugins_el: etree._Element, ns: str, group_id: str, artifact_id: str
+    ) -> etree._Element | None:
+        for plugin_el in plugins_el.findall(f"{ns}plugin"):
+            group_el = plugin_el.find(f"{ns}groupId")
+            artifact_el = plugin_el.find(f"{ns}artifactId")
+            if (
+                group_el is not None
+                and group_el.text
+                and group_el.text.strip() == group_id
+                and artifact_el is not None
+                and artifact_el.text
+                and artifact_el.text.strip() == artifact_id
+            ):
+                return plugin_el
+        return None
+
+    @staticmethod
+    def _find_execution_element(
+        executions_el: etree._Element, ns: str, execution_id: str
+    ) -> etree._Element | None:
+        for execution_el in executions_el.findall(f"{ns}execution"):
+            id_el = execution_el.find(f"{ns}id")
+            if id_el is not None and id_el.text and id_el.text.strip() == execution_id:
+                return execution_el
         return None
 
     @staticmethod

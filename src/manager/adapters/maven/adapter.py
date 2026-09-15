@@ -6,7 +6,18 @@ from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
 from manager.adapters.maven.directory import detect_directory_structure
 from manager.adapters.maven.parser import MavenPomParser
 from manager.adapters.maven.writer import MavenPomWriter
-from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
+from manager.models import (
+    BuildFile,
+    Dependency,
+    DirectoryRole,
+    Module,
+    Project,
+    ProjectMetadata,
+)
+
+_REGISTERABLE_ROLES: frozenset[DirectoryRole] = frozenset(
+    {"source", "test-source", "resource", "test-resource"}
+)
 
 
 class MavenAdapter(BuildToolAdapter):
@@ -394,3 +405,28 @@ class MavenAdapter(BuildToolAdapter):
             if found is not None:
                 return found
         return None
+
+    def register_directory_role(
+        self,
+        project: Project,
+        module_name: str,
+        relative_path: Path,
+        role: DirectoryRole,
+    ) -> Project:
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if role not in _REGISTERABLE_ROLES:
+            raise ValueError(
+                f"role invalido: '{role}' (use um de {sorted(_REGISTERABLE_ROLES)})"
+            )
+
+        target_path = self._resolve_module_relative_path(project, target, relative_path)
+        if not target_path.is_dir():
+            raise ValueError(f"'{relative_path}' nao existe; crie o diretorio primeiro")
+
+        pom_path = project.root_path / target.build_file.path
+        self._writer.register_directory_role(pom_path, str(relative_path), role)
+
+        return self.infer_structure(project.root_path)
