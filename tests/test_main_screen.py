@@ -501,6 +501,56 @@ async def test_bom_panel_shows_managed_dependencies(project_root, tmp_path):
         assert bom_panel.query_one("#bom-empty").display is False
 
 
+async def test_bom_panel_removes_managed_dependency(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        removed = screen.project.managed_dependencies[0]
+
+        await pilot.press("4")
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+
+        names = {dep.artifact_id for dep in screen.project.managed_dependencies}
+        assert removed.artifact_id not in names
+
+
+async def test_bom_panel_removing_last_dependency_shows_empty_state(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("4")
+        await pilot.pause()
+        remaining = len(screen.project.managed_dependencies)
+        for _ in range(remaining):
+            await pilot.press("d")
+            await pilot.pause()
+
+        assert screen.project.managed_dependencies == []
+        bom_panel = screen.query_one(BomPanel)
+        assert bom_panel.query_one("#bom-empty").display is True
+        assert bom_panel.query_one("#bom-list", ListView).display is False
+
+
 async def test_update_metadata_via_panel(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
