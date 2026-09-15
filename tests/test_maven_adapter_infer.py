@@ -87,11 +87,3 @@ def test_infer_structure_raises_for_missing_pom(tmp_path):
 def test_infer_structure_raises_clear_error_for_malformed_pom():
     with pytest.raises(ValueError, match="pom.xml invalido"):
         MavenAdapter().infer_structure(MALFORMED)
-
-
-@pytest.mark.parametrize("method_name", ["update_dependency"])
-def test_mutation_methods_are_not_implemented_yet(method_name):
-    adapter = MavenAdapter()
-    method = getattr(adapter, method_name)
-    with pytest.raises(NotImplementedError):
-        method(None, None, None)
