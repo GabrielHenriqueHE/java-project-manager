@@ -74,3 +74,13 @@ class BuildToolAdapter(ABC):
         escapar do diretorio do modulo, se o diretorio nao existir, ou
         se nao estiver vazio. Nunca remove recursivamente.
         """
+
+    @abstractmethod
+    def remove_dependency(
+        self, project: Project, group_id: str, artifact_id: str
+    ) -> Project:
+        """Remove a dependencia gerenciada (managed=True) identificada por
+        (group_id, artifact_id), em qualquer modulo do projeto que a declare.
+
+        Levanta ValueError se nenhum modulo tiver essa dependencia gerenciada.
+        """
