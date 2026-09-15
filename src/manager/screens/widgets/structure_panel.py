@@ -104,13 +104,19 @@ def render_project_tree(project: Project) -> str:
 class StructurePanel(Panel):
     """Painel [5] ESTRUTURA: checklist de diretorios + arvore do projeto."""
 
-    BINDINGS = [("space", "toggle_active_module", "alterna")]
+    BINDINGS = [
+        ("space", "toggle_active_module", "alterna modulo"),
+        ("j", "cursor_down", "mover"),
+        ("k", "cursor_up", "mover"),
+        ("enter", "create_selected", "criar"),
+    ]
 
     def __init__(self, **kwargs):
         super().__init__(5, "ESTRUTURA", **kwargs)
         self._project: Project | None = None
         self._modules: list[Module] = []
         self._active_index = 0
+        self._checklist_index = 0
 
     def compose_body(self) -> ComposeResult:
         with VerticalScroll():
@@ -128,6 +134,7 @@ class StructurePanel(Panel):
         if project is None:
             self._modules = []
             self._active_index = 0
+            self._checklist_index = 0
             self.set_header_right("")
             checklist.update("")
             tree.update("sem modulos. pressione n")
@@ -147,19 +154,42 @@ class StructurePanel(Panel):
 
         active_module = self._modules[self._active_index]
         module_dir = self._project.root_path / active_module.relative_path
-        self.set_header_right(f"space alterna · {active_module.name}")
+        self.set_header_right(f"enter cria · space alterna · {active_module.name}")
 
         lines = []
-        for rel in _CHECKLIST_DIRS:
+        for index, rel in enumerate(_CHECKLIST_DIRS):
             checked = (module_dir / rel).is_dir()
             box = "[bold $accent][x][/]" if checked else "[dim][ ][/]"
             style = "" if checked else "[dim]"
             close = "" if checked else "[/]"
-            lines.append(f"{box} {style}{rel}{close}")
+            line = f"{box} {style}{rel}{close}"
+            if index == self._checklist_index:
+                line = f"[reverse]{line}[/]"
+            lines.append(line)
         checklist.update("\n".join(lines))
 
     def action_toggle_active_module(self) -> None:
         if not self._modules:
             return
         self._active_index = (self._active_index + 1) % len(self._modules)
+        self._checklist_index = 0
         self._render_checklist()
+
+    def action_cursor_down(self) -> None:
+        if not self._modules:
+            return
+        self._checklist_index = (self._checklist_index + 1) % len(_CHECKLIST_DIRS)
+        self._render_checklist()
+
+    def action_cursor_up(self) -> None:
+        if not self._modules:
+            return
+        self._checklist_index = (self._checklist_index - 1) % len(_CHECKLIST_DIRS)
+        self._render_checklist()
+
+    def action_create_selected(self) -> None:
+        if not self._modules:
+            return
+        active_module = self._modules[self._active_index]
+        relative_path = _CHECKLIST_DIRS[self._checklist_index]
+        self.screen.add_directory(active_module, relative_path)
