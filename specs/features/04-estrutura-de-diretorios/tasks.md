@@ -2,4 +2,6 @@
 
 Coberto parcialmente pela **Fase 1** (modelo `DirectoryStructure`/`DirectoryNode` + inferência a partir da convenção Maven padrão) — ver `specs/phases/phase-1-fundacao/tasks.md` (tasks T4, T8).
 
-Edição/aplicação de estrutura customizada fica para fase futura.
+**Criação de diretório em disco implementada** na Fase 4 (`specs/phases/phase-4-estrutura-diretorios/`): `BuildToolAdapter.add_directory` funcional de ponta a ponta no `MavenAdapter` (só I/O de filesystem, sem tocar em `pom.xml`) e na TUI (Painel [5] ESTRUTURA, checklist navegável com `j`/`k` + `enter` cria o item destacado).
+
+Ainda fora de escopo: caminho de diretório livre digitado pelo usuário, edição de `DirectoryNode.role`, remoção de diretórios, e registro de diretórios não-padrão no `pom.xml` (ex.: `build-helper-maven-plugin`) — ficam para fatias futuras.
