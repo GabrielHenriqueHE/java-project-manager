@@ -295,6 +295,21 @@ class MainScreen(Screen):
 
         self.app.push_screen(DirectoryFormScreen(), _on_submit)
 
+    def remove_directory(self, module: Module, relative_path: str) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        try:
+            updated = self._adapter.remove_directory(
+                self.project, module.name, Path(relative_path)
+            )
+        except ValueError as exc:
+            severity = "warning" if "nao existe" in str(exc) else "error"
+            self.notify(str(exc), severity=severity)
+            return
+        self.notify(f"'{relative_path}' removido")
+        self.set_project(updated)
+
     # ---- navegacao entre paineis ----
 
     def action_focus_panel(self, number: int) -> None:
