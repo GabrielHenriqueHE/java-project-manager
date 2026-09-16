@@ -3,8 +3,9 @@ from pathlib import Path
 
 from lxml import etree
 
+from manager.adapters.maven import build_helper
 from manager.adapters.maven.xml_utils import namespace_of
-from manager.models import Dependency, ProjectMetadata
+from manager.models import Dependency, DirectoryRole, ProjectMetadata
 
 
 @dataclass
@@ -22,6 +23,9 @@ class ParsedPom:
     dependencies: list[Dependency] = field(default_factory=list)
     managed_dependencies: list[Dependency] = field(default_factory=list)
     module_names: list[str] = field(default_factory=list)
+    registered_directories: list[tuple[str, DirectoryRole]] = field(
+        default_factory=list
+    )
 
 
 class MavenPomParser:
@@ -88,6 +92,10 @@ class MavenPomParser:
                 el.text.strip() for el in modules_el.findall(f"{ns}module") if el.text
             ]
 
+        registered_directories = self._parse_registered_directories(
+            root.find(f"{ns}build"), ns
+        )
+
         return ParsedPom(
             pom_path=pom_path,
             metadata=metadata,
@@ -95,7 +103,76 @@ class MavenPomParser:
             dependencies=dependencies,
             managed_dependencies=managed_dependencies,
             module_names=module_names,
+            registered_directories=registered_directories,
         )
+
+    def _parse_registered_directories(
+        self, build_el: etree._Element | None, ns: str
+    ) -> list[tuple[str, DirectoryRole]]:
+        """Le de volta os diretorios ja registrados como fonte/recurso extra
+        via org.codehaus.mojo:build-helper-maven-plugin (escrito por
+        MavenPomWriter.register_directory_role). Ignora silenciosamente
+        qualquer <build><plugins> que nao siga esse formato - nao e papel
+        da inferencia validar configuracao de build de terceiros.
+        """
+        if build_el is None:
+            return []
+        plugins_el = build_el.find(f"{ns}plugins")
+        if plugins_el is None:
+            return []
+
+        registered: list[tuple[str, DirectoryRole]] = []
+        for plugin_el in plugins_el.findall(f"{ns}plugin"):
+            if not self._is_build_helper_plugin(plugin_el, ns):
+                continue
+            executions_el = plugin_el.find(f"{ns}executions")
+            if executions_el is None:
+                continue
+            for execution_el in executions_el.findall(f"{ns}execution"):
+                registered.extend(self._parse_execution_directories(execution_el, ns))
+        return registered
+
+    @classmethod
+    def _is_build_helper_plugin(cls, plugin_el: etree._Element, ns: str) -> bool:
+        return (
+            cls._text(plugin_el, "groupId", ns) == build_helper.GROUP_ID
+            and cls._text(plugin_el, "artifactId", ns) == build_helper.ARTIFACT_ID
+        )
+
+    @classmethod
+    def _parse_execution_directories(
+        cls, execution_el: etree._Element, ns: str
+    ) -> list[tuple[str, DirectoryRole]]:
+        goals_el = execution_el.find(f"{ns}goals")
+        if goals_el is None:
+            return []
+        goal = cls._text(goals_el, "goal", ns)
+        role = build_helper.GOAL_ROLE.get(goal) if goal else None
+        if role is None:
+            return []
+
+        config_el = execution_el.find(f"{ns}configuration")
+        if config_el is None:
+            return []
+
+        if role in ("source", "test-source"):
+            sources_el = config_el.find(f"{ns}sources")
+            if sources_el is None:
+                return []
+            return [
+                (el.text.strip(), role)
+                for el in sources_el.findall(f"{ns}source")
+                if el.text
+            ]
+
+        resources_el = config_el.find(f"{ns}resources")
+        if resources_el is None:
+            return []
+        paths = [
+            cls._text(resource_el, "directory", ns)
+            for resource_el in resources_el.findall(f"{ns}resource")
+        ]
+        return [(path, role) for path in paths if path]
 
     @staticmethod
     def _text(parent: etree._Element, tag: str, ns: str) -> str | None:

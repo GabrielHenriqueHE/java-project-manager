@@ -1,12 +1,19 @@
 from pathlib import Path
 
-from manager.models import DirectoryNode, DirectoryStructure
+from manager.models import DirectoryNode, DirectoryRole, DirectoryStructure
 
 _STANDARD_DIRS = {
     "source": "src/main/java",
     "test-source": "src/test/java",
     "resource": "src/main/resources",
     "test-resource": "src/test/resources",
+}
+
+_ROLE_LIST_ATTR: dict[DirectoryRole, str] = {
+    "source": "source_dirs",
+    "test-source": "test_dirs",
+    "resource": "resource_dirs",
+    "test-resource": "test_resource_dirs",
 }
 
 
@@ -46,6 +53,25 @@ def detect_directory_structure(module_dir: Path) -> DirectoryStructure:
             [_STANDARD_DIRS["test-resource"]] if present["test-resource"] else []
         ),
     )
+
+
+def merge_registered_directories(
+    structure: DirectoryStructure,
+    module_dir: Path,
+    registered: list[tuple[str, DirectoryRole]],
+) -> DirectoryStructure:
+    """Inclui diretorios registrados via build-helper-maven-plugin (lidos de
+    volta do <build><plugins> pelo parser) nas listas por role, se ainda
+    existirem em disco. Nao mexe em `convention`/`tree`.
+    """
+    for relative_path, role in registered:
+        if not (module_dir / relative_path).is_dir():
+            continue
+        attr = _ROLE_LIST_ATTR[role]
+        current: list[str] = getattr(structure, attr)
+        if relative_path not in current:
+            setattr(structure, attr, [*current, relative_path])
+    return structure
 
 
 def _build_tree(path: Path) -> DirectoryNode:

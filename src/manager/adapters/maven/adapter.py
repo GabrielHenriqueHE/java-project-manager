@@ -3,7 +3,10 @@ from pathlib import Path
 from lxml import etree
 
 from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
-from manager.adapters.maven.directory import detect_directory_structure
+from manager.adapters.maven.directory import (
+    detect_directory_structure,
+    merge_registered_directories,
+)
 from manager.adapters.maven.parser import MavenPomParser
 from manager.adapters.maven.writer import MavenPomWriter
 from manager.models import (
@@ -75,12 +78,17 @@ class MavenAdapter(BuildToolAdapter):
             parsed.managed_dependencies
         )
 
+        directory_structure = detect_directory_structure(module_dir)
+        merge_registered_directories(
+            directory_structure, module_dir, parsed.registered_directories
+        )
+
         return Module(
             name=parsed.metadata.artifact_id,
             relative_path=module_dir.relative_to(root_path),
             metadata=parsed.metadata,
             dependencies=parsed.dependencies + parsed.managed_dependencies,
-            directory_structure=detect_directory_structure(module_dir),
+            directory_structure=directory_structure,
             build_file=BuildFile(path=pom_path.relative_to(root_path)),
             submodules=submodules,
             is_bom=is_bom,
