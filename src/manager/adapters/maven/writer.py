@@ -59,9 +59,9 @@ class MavenPomWriter:
         self,
         pom_path: Path,
         *,
-        parent_group_id: str,
-        parent_artifact_id: str,
-        parent_version: str,
+        parent_group_id: str | None = None,
+        parent_artifact_id: str | None = None,
+        parent_version: str | None = None,
         artifact_id: str,
         group_id: str | None = None,
         version: str | None = None,
@@ -69,8 +69,16 @@ class MavenPomWriter:
         name: str | None = None,
         description: str | None = None,
         dependencies: list[Dependency] | None = None,
+        submodule_names: list[str] | None = None,
     ) -> None:
-        """Cria um pom.xml novo, filho do modulo indicado por parent_*."""
+        """Cria um pom.xml novo.
+
+        Filho de um modulo pai se os 3 parent_* forem informados (bloco
+        <parent> escrito); pom raiz sem <parent> se forem todos omitidos
+        (caso em que group_id/version precisam ser informados por quem
+        chama, ja que nao ha de quem herdar). submodule_names, se nao
+        vazio, escreve <modules> com uma entrada por nome.
+        """
         nsmap = {None: POM_NS, "xsi": XSI_NS}
         root = etree.Element(f"{{{POM_NS}}}project", nsmap=nsmap)
         root.set(
@@ -88,10 +96,11 @@ class MavenPomWriter:
 
         child(root, "modelVersion", "4.0.0")
 
-        parent_el = child(root, "parent")
-        child(parent_el, "groupId", parent_group_id)
-        child(parent_el, "artifactId", parent_artifact_id)
-        child(parent_el, "version", parent_version)
+        if parent_group_id and parent_artifact_id and parent_version:
+            parent_el = child(root, "parent")
+            child(parent_el, "groupId", parent_group_id)
+            child(parent_el, "artifactId", parent_artifact_id)
+            child(parent_el, "version", parent_version)
 
         child(root, "artifactId", artifact_id)
         if group_id:
@@ -117,6 +126,11 @@ class MavenPomWriter:
             deps_el = child(root, "dependencies")
             for dep in direct:
                 self._append_dependency_element(deps_el, dep)
+
+        if submodule_names:
+            modules_el = child(root, "modules")
+            for module_name in submodule_names:
+                child(modules_el, "module", module_name)
 
         tree = etree.ElementTree(root)
         etree.indent(tree, space="  ")

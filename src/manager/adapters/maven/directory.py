@@ -2,7 +2,7 @@ from pathlib import Path
 
 from manager.models import DirectoryNode, DirectoryRole, DirectoryStructure
 
-_STANDARD_DIRS = {
+STANDARD_DIRS = {
     "source": "src/main/java",
     "test-source": "src/test/java",
     "resource": "src/main/resources",
@@ -25,9 +25,7 @@ def detect_directory_structure(module_dir: Path) -> DirectoryStructure:
             source_dirs=[], test_dirs=[], resource_dirs=[], test_resource_dirs=[]
         )
 
-    present = {
-        role: (module_dir / rel).is_dir() for role, rel in _STANDARD_DIRS.items()
-    }
+    present = {role: (module_dir / rel).is_dir() for role, rel in STANDARD_DIRS.items()}
     non_standard_entries = [
         child
         for child in src_dir.iterdir()
@@ -46,11 +44,11 @@ def detect_directory_structure(module_dir: Path) -> DirectoryStructure:
 
     return DirectoryStructure(
         convention="maven-standard",
-        source_dirs=[_STANDARD_DIRS["source"]] if present["source"] else [],
-        test_dirs=[_STANDARD_DIRS["test-source"]] if present["test-source"] else [],
-        resource_dirs=([_STANDARD_DIRS["resource"]] if present["resource"] else []),
+        source_dirs=[STANDARD_DIRS["source"]] if present["source"] else [],
+        test_dirs=[STANDARD_DIRS["test-source"]] if present["test-source"] else [],
+        resource_dirs=([STANDARD_DIRS["resource"]] if present["resource"] else []),
         test_resource_dirs=(
-            [_STANDARD_DIRS["test-resource"]] if present["test-resource"] else []
+            [STANDARD_DIRS["test-resource"]] if present["test-resource"] else []
         ),
     )
 
