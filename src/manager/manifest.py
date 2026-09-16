@@ -1,9 +1,17 @@
+import fnmatch
+import shutil
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field
 
-from manager.models import Dependency, DirectoryStructure, Module, ProjectMetadata
+from manager.models import (
+    Dependency,
+    DirectoryStructure,
+    Module,
+    Project,
+    ProjectMetadata,
+)
 
 
 class ModuleManifest(BaseModel):
@@ -45,6 +53,42 @@ def dump_manifest(manifest: ModuleManifest, path: Path) -> None:
     data = manifest.model_dump(mode="json", exclude_defaults=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+
+
+def export_source_files(
+    project: Project, manifest_path: Path, pattern: str
+) -> list[str]:
+    """Copia os diretorios (source/test/resource/test-resource) dos modulos
+    cujo artifactId bate com `pattern` (glob via fnmatch) para uma pasta
+    irma do manifesto: <manifest_path sem extensao>.files/<artifactId>/...,
+    preservando a mesma subestrutura relativa de directory_structure.
+    Retorna os artifactId que bateram com o padrao (lista vazia = nenhum).
+    """
+    files_root = manifest_path.parent / f"{manifest_path.stem}.files"
+    matched: list[str] = []
+
+    def walk(module: Module) -> None:
+        artifact_id = module.metadata.artifact_id
+        if fnmatch.fnmatch(artifact_id, pattern):
+            matched.append(artifact_id)
+            module_dir = project.root_path / module.relative_path
+            rel_dirs = {
+                *module.directory_structure.source_dirs,
+                *module.directory_structure.test_dirs,
+                *module.directory_structure.resource_dirs,
+                *module.directory_structure.test_resource_dirs,
+            }
+            for rel_dir in rel_dirs:
+                src = module_dir / rel_dir
+                if src.is_dir():
+                    shutil.copytree(
+                        src, files_root / artifact_id / rel_dir, dirs_exist_ok=True
+                    )
+        for sub in module.submodules:
+            walk(sub)
+
+    walk(project.root_module)
+    return matched
 
 
 def load_manifest(path: Path) -> ModuleManifest:

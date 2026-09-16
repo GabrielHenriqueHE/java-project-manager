@@ -1,10 +1,13 @@
+import shutil
 from pathlib import Path
 
 import pytest
 
+from manager.adapters.maven.adapter import MavenAdapter
 from manager.manifest import (
     ModuleManifest,
     dump_manifest,
+    export_source_files,
     is_bom_manifest,
     load_manifest,
     to_manifest,
@@ -18,6 +21,8 @@ from manager.models import (
     Module,
     ProjectMetadata,
 )
+
+FIXTURE_SOURCE = Path(__file__).parent / "fixtures" / "maven-multi-module"
 
 
 def test_load_manifest_parses_yaml(tmp_path):
@@ -180,3 +185,65 @@ def test_dump_manifest_overwrites_existing_file(tmp_path):
     dump_manifest(manifest, path)
 
     assert "conteudo antigo" not in path.read_text()
+
+
+@pytest.fixture
+def project_root(tmp_path) -> Path:
+    dest = tmp_path / "project"
+    shutil.copytree(FIXTURE_SOURCE, dest)
+    return dest
+
+
+def test_export_source_files_copies_only_matching_modules(project_root, tmp_path):
+    project = MavenAdapter().infer_structure(project_root)
+    manifest_path = tmp_path / "manifest.yaml"
+
+    matched = export_source_files(project, manifest_path, "core")
+
+    assert matched == ["core"]
+    files_root = tmp_path / "manifest.files"
+    copied_java = (
+        files_root
+        / "core"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "example"
+        / "core"
+        / "Core.java"
+    )
+    assert copied_java.is_file()
+    original_java = (
+        project_root
+        / "core"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "example"
+        / "core"
+        / "Core.java"
+    )
+    assert copied_java.read_text() == original_java.read_text()
+    assert not (files_root / "api").exists()
+    assert not (files_root / "multi-module-demo-bom").exists()
+
+
+def test_export_source_files_supports_glob_pattern(project_root, tmp_path):
+    project = MavenAdapter().infer_structure(project_root)
+    manifest_path = tmp_path / "manifest.yaml"
+
+    matched = export_source_files(project, manifest_path, "*-bom")
+
+    assert matched == ["multi-module-demo-bom"]
+
+
+def test_export_source_files_no_match_creates_nothing(project_root, tmp_path):
+    project = MavenAdapter().infer_structure(project_root)
+    manifest_path = tmp_path / "manifest.yaml"
+
+    matched = export_source_files(project, manifest_path, "shared-*")
+
+    assert matched == []
+    assert not (tmp_path / "manifest.files").exists()
