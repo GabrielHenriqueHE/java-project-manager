@@ -27,7 +27,7 @@ Tests use `pytest-asyncio` in `auto` mode (see `pyproject.toml`) — async test 
 **Domain model is build-tool agnostic; adapters translate to/from real build files.**
 
 - `src/manager/models.py` — Pydantic models (`Project`, `Module`, `Dependency`, `ProjectMetadata`, `DirectoryStructure`, ...). This is the vocabulary every other layer speaks.
-- `src/manager/adapters/base.py` — `BuildToolAdapter` ABC every build tool implements: `detect`, `infer_structure`, `add_module`, `remove_module`, `update_dependency`, `update_metadata`, `add_directory`, `remove_directory`, `remove_dependency`. All nine are implemented end-to-end in `MavenAdapter`.
+- `src/manager/adapters/base.py` — `BuildToolAdapter` ABC every build tool implements: `detect`, `infer_structure`, `add_module`, `remove_module`, `update_dependency`, `update_metadata`, `add_directory`, `remove_directory`, `remove_dependency`, `register_directory_role`. All ten are implemented end-to-end in `MavenAdapter`.
 - `src/manager/adapters/maven/` — the only implementation today (`adapter.py` orchestrates, `parser.py` reads POMs, `writer.py` edits them, `directory.py` handles module scaffolding on disk, `xml_utils.py` for namespace/XPath helpers). Uses `lxml` specifically to preserve formatting/comments in the user's POM and minimize diffs.
 - `src/manager/services/adapters_registry.py` — `detect_adapter(path)` picks the right `BuildToolAdapter` for a project root. Add new build tools here.
 - `src/manager/services/registry.py` — `ProjectRegistry`, the **only** persistent state owned by the app itself (`~/.config/java-project-manager/registry.json`: known project paths + build tool). Everything else about a project's structure is never persisted — it's always re-derived live via `infer_structure()` to avoid drift from the real files on disk (e.g. after a `git pull` or manual edit).
@@ -42,7 +42,7 @@ Single-screen, 3-column, 5-panel layout ("mvnforge"), replacing an earlier multi
 - Col 1: `[1] PROJETOS` over `[3] MÓDULOS`
 - Col 2: `[2] METADADOS` over `[4] BOM + DEPENDÊNCIAS`
 - Col 3: `[5] ESTRUTURA` (full column)
-- `1`-`5`/`tab` switch panel focus, `j`/`k` move within a list (or the Estrutura checklist), `n` create, `d` delete, `enter` select/edit (or create the highlighted directory in Estrutura), `space` toggle active module in Estrutura, `:` opens command mode (e.g. `:modulo <nome>`).
+- `1`-`5`/`tab` switch panel focus, `j`/`k` move within a list (or the Estrutura checklist), `n` create, `d` delete, `enter` select/edit (or create the highlighted directory in Estrutura), `b` register the active directory in the build (Estrutura), `space` toggle active module in Estrutura, `:` opens command mode (e.g. `:modulo <nome>`).
 
 `MainScreen` owns shared state (`project`, `selected_module`) and propagates refresh to panels after mutations.
 
