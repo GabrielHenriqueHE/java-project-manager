@@ -1,0 +1,282 @@
+import pytest
+
+from manager.adapters.maven.adapter import MavenAdapter
+from manager.manifest import ModuleManifest
+from manager.models import Dependency, DirectoryStructure, Module, ProjectMetadata
+
+
+def _flatten(module: Module) -> list[Module]:
+    result = [module]
+    for sub in module.submodules:
+        result.extend(_flatten(sub))
+    return result
+
+
+def test_create_project_materializes_single_module(tmp_path):
+    destination = tmp_path / "demo"
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        )
+    )
+
+    project = MavenAdapter().create_project(manifest, destination)
+
+    assert project.root_module.name == "demo"
+    assert project.root_module.metadata.group_id == "com.example"
+    assert project.root_module.metadata.version == "1.0.0"
+    assert (destination / "pom.xml").is_file()
+    assert "<parent>" not in (destination / "pom.xml").read_text()
+
+
+def test_create_project_materializes_multi_module_with_inherited_group_version(
+    tmp_path,
+):
+    destination = tmp_path / "demo"
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        submodules=[
+            ModuleManifest(metadata=ProjectMetadata(artifact_id="core")),
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="api", version="2.0.0")
+            ),
+        ],
+    )
+
+    project = MavenAdapter().create_project(manifest, destination)
+    modules = {m.name: m for m in _flatten(project.root_module)}
+
+    assert set(modules) == {"demo", "core", "api"}
+    assert modules["core"].metadata.group_id == "com.example"
+    assert modules["core"].metadata.version == "1.0.0"
+    core_pom = (destination / "core" / "pom.xml").read_text()
+    # groupId so aparece uma vez (dentro de <parent>) - herdado, nao repetido na raiz
+    assert core_pom.count("<groupId>com.example</groupId>") == 1
+
+    assert modules["api"].metadata.version == "2.0.0"
+    api_pom = (destination / "api" / "pom.xml").read_text()
+    assert "<version>2.0.0</version>" in api_pom
+
+
+def test_create_project_materializes_bom_module(tmp_path):
+    destination = tmp_path / "demo"
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        submodules=[
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="demo-bom", packaging="pom"),
+                dependencies=[
+                    Dependency(
+                        group_id="org.apache.commons",
+                        artifact_id="commons-lang3",
+                        version="3.14.0",
+                        managed=True,
+                    )
+                ],
+            ),
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="core"),
+                dependencies=[
+                    Dependency(
+                        group_id="org.apache.commons",
+                        artifact_id="commons-lang3",
+                        managed=False,
+                    )
+                ],
+            ),
+        ],
+    )
+
+    project = MavenAdapter().create_project(manifest, destination)
+    modules = {m.name: m for m in _flatten(project.root_module)}
+
+    assert modules["demo-bom"].is_bom is True
+    managed = {d.artifact_id: d for d in project.managed_dependencies}
+    assert managed["commons-lang3"].version == "3.14.0"
+
+    core_deps = {d.artifact_id: d for d in modules["core"].dependencies}
+    assert core_deps["commons-lang3"].managed is False
+
+
+def test_create_project_creates_conventional_directory_without_registering_build(
+    tmp_path,
+):
+    destination = tmp_path / "demo"
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        ),
+        directory_structure=DirectoryStructure(
+            source_dirs=["src/main/java"],
+            test_dirs=[],
+            resource_dirs=[],
+            test_resource_dirs=[],
+        ),
+    )
+
+    MavenAdapter().create_project(manifest, destination)
+
+    assert (destination / "src" / "main" / "java").is_dir()
+    assert "build-helper-maven-plugin" not in (destination / "pom.xml").read_text()
+
+
+def test_create_project_registers_nonstandard_directory_in_build(tmp_path):
+    destination = tmp_path / "demo"
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        ),
+        directory_structure=DirectoryStructure(
+            source_dirs=["src/main/proto"],
+            test_dirs=[],
+            resource_dirs=[],
+            test_resource_dirs=[],
+        ),
+    )
+
+    project = MavenAdapter().create_project(manifest, destination)
+
+    assert (destination / "src" / "main" / "proto").is_dir()
+    pom_text = (destination / "pom.xml").read_text()
+    assert "build-helper-maven-plugin" in pom_text
+    assert "<source>src/main/proto</source>" in pom_text
+    assert "src/main/proto" in project.root_module.directory_structure.source_dirs
+
+
+def test_create_project_rejects_root_without_group_id_or_version(tmp_path):
+    manifest = ModuleManifest(metadata=ProjectMetadata(artifact_id="demo"))
+
+    with pytest.raises(ValueError, match="groupId e version"):
+        MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert not (tmp_path / "demo").exists()
+
+
+def test_create_project_rejects_duplicate_module_names(tmp_path):
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        submodules=[
+            ModuleManifest(metadata=ProjectMetadata(artifact_id="core")),
+            ModuleManifest(metadata=ProjectMetadata(artifact_id="core")),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="duplicado"):
+        MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert not (tmp_path / "demo").exists()
+
+
+def test_create_project_rejects_more_than_one_bom_module(tmp_path):
+    managed_dep = Dependency(
+        group_id="org.apache.commons",
+        artifact_id="commons-lang3",
+        version="3.14.0",
+        managed=True,
+    )
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        submodules=[
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="bom-a", packaging="pom"),
+                dependencies=[managed_dep],
+            ),
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="bom-b", packaging="pom"),
+                dependencies=[managed_dep],
+            ),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="Mais de um modulo BOM"):
+        MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert not (tmp_path / "demo").exists()
+
+
+def test_create_project_rejects_managed_dependency_without_version(tmp_path):
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        dependencies=[
+            Dependency(
+                group_id="org.apache.commons", artifact_id="commons-lang3", managed=True
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="precisa de version"):
+        MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert not (tmp_path / "demo").exists()
+
+
+def test_create_project_rejects_submodule_holder_with_non_pom_packaging(tmp_path):
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="jar",
+        ),
+        submodules=[ModuleManifest(metadata=ProjectMetadata(artifact_id="core"))],
+    )
+
+    with pytest.raises(ValueError, match="packaging precisa ser 'pom'"):
+        MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert not (tmp_path / "demo").exists()
+
+
+def test_create_project_rejects_existing_nonempty_destination(tmp_path):
+    destination = tmp_path / "demo"
+    destination.mkdir()
+    (destination / "README.md").write_text("ja tem algo aqui")
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        )
+    )
+
+    with pytest.raises(ValueError, match="ja existe e nao esta vazio"):
+        MavenAdapter().create_project(manifest, destination)
+
+    assert not (destination / "pom.xml").exists()
+
+
+def test_create_project_allows_existing_empty_destination(tmp_path):
+    destination = tmp_path / "demo"
+    destination.mkdir()
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        )
+    )
+
+    project = MavenAdapter().create_project(manifest, destination)
+
+    assert project.root_module.name == "demo"

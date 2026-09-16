@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from manager.manifest import ModuleManifest
 from manager.models import (
     BuildTool,
     Dependency,
@@ -32,6 +33,19 @@ class BuildToolAdapter(ABC):
     @abstractmethod
     def infer_structure(self, root_path: Path) -> Project:
         """Le os arquivos de build reais e monta o modelo de dominio."""
+
+    @abstractmethod
+    def create_project(
+        self, manifest: ModuleManifest, destination_path: Path
+    ) -> Project:
+        """Materializa um projeto novo em destination_path a partir de manifest.
+
+        Valida a arvore inteira do manifesto antes de qualquer escrita em
+        disco. Levanta ValueError se destination_path ja existir e nao
+        estiver vazio, ou se o manifesto for invalido (nomes duplicados,
+        campos obrigatorios ausentes, regras especificas da build tool).
+        Retorna sempre infer_structure(destination_path).
+        """
 
     @abstractmethod
     def add_module(

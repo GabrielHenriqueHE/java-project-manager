@@ -4,15 +4,18 @@ from lxml import etree
 
 from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
 from manager.adapters.maven.directory import (
+    STANDARD_DIRS,
     detect_directory_structure,
     merge_registered_directories,
 )
 from manager.adapters.maven.parser import MavenPomParser
 from manager.adapters.maven.writer import MavenPomWriter
+from manager.manifest import ModuleManifest, is_bom_manifest, validate_manifest_tree
 from manager.models import (
     BuildFile,
     Dependency,
     DirectoryRole,
+    DirectoryStructure,
     Module,
     Project,
     ProjectMetadata,
@@ -438,3 +441,146 @@ class MavenAdapter(BuildToolAdapter):
         self._writer.register_directory_role(pom_path, str(relative_path), role)
 
         return self.infer_structure(project.root_path)
+
+    def create_project(
+        self, manifest: ModuleManifest, destination_path: Path
+    ) -> Project:
+        validate_manifest_tree(manifest)
+        self._validate_maven_manifest(manifest, is_root=True)
+
+        destination_path = destination_path.resolve()
+        if destination_path.exists() and any(destination_path.iterdir()):
+            raise ValueError(f"'{destination_path}' ja existe e nao esta vazio")
+        destination_path.mkdir(parents=True, exist_ok=True)
+
+        self._materialize(manifest, destination_path, None, None, None)
+
+        return self.infer_structure(destination_path)
+
+    def _validate_maven_manifest(
+        self,
+        module: ModuleManifest,
+        *,
+        is_root: bool,
+        bom_count: list[int] | None = None,
+    ) -> None:
+        if bom_count is None:
+            bom_count = [0]
+
+        if is_root and (not module.metadata.group_id or not module.metadata.version):
+            raise ValueError(
+                "Modulo raiz nao tem parent para herdar: "
+                "groupId e version sao obrigatorios"
+            )
+
+        is_bom = is_bom_manifest(module)
+        if is_bom:
+            bom_count[0] += 1
+            if bom_count[0] > 1:
+                raise ValueError(
+                    "Mais de um modulo BOM (packaging pom + dependencia managed) "
+                    "no manifesto; o projeto so pode ter um"
+                )
+
+        if (module.submodules or is_bom) and module.metadata.packaging != "pom":
+            raise ValueError(
+                f"Modulo '{module.metadata.artifact_id}' tem submodulos ou e BOM; "
+                "packaging precisa ser 'pom'"
+            )
+
+        for dep in module.dependencies:
+            if dep.managed and not dep.version:
+                raise ValueError(
+                    f"Dependencia gerenciada '{dep.group_id}:{dep.artifact_id}' "
+                    "precisa de version"
+                )
+
+        for sub in module.submodules:
+            self._validate_maven_manifest(sub, is_root=False, bom_count=bom_count)
+
+    def _materialize(
+        self,
+        module: ModuleManifest,
+        module_dir: Path,
+        parent_artifact_id: str | None,
+        effective_group_id: str | None,
+        effective_version: str | None,
+    ) -> tuple[str | None, str | None]:
+        artifact_id = module.metadata.artifact_id
+        submodule_names = [
+            sub.metadata.artifact_id for sub in module.submodules
+        ] or None
+
+        if parent_artifact_id is None:
+            own_group_id = module.metadata.group_id
+            own_version = module.metadata.version
+            self._writer.create_pom(
+                module_dir / "pom.xml",
+                artifact_id=artifact_id,
+                group_id=own_group_id,
+                version=own_version,
+                packaging=module.metadata.packaging,
+                name=module.metadata.name,
+                description=module.metadata.description,
+                dependencies=module.dependencies,
+                submodule_names=submodule_names,
+            )
+        else:
+            own_group_id = module.metadata.group_id or effective_group_id
+            own_version = module.metadata.version or effective_version
+            write_group_id = (
+                module.metadata.group_id
+                if module.metadata.group_id
+                and module.metadata.group_id != effective_group_id
+                else None
+            )
+            write_version = (
+                module.metadata.version
+                if module.metadata.version
+                and module.metadata.version != effective_version
+                else None
+            )
+            self._writer.create_pom(
+                module_dir / "pom.xml",
+                parent_group_id=effective_group_id,
+                parent_artifact_id=parent_artifact_id,
+                parent_version=effective_version,
+                artifact_id=artifact_id,
+                group_id=write_group_id,
+                version=write_version,
+                packaging=module.metadata.packaging,
+                name=module.metadata.name,
+                description=module.metadata.description,
+                dependencies=module.dependencies,
+                submodule_names=submodule_names,
+            )
+
+        self._materialize_directories(module_dir, module.directory_structure)
+
+        for sub in module.submodules:
+            self._materialize(
+                sub,
+                module_dir / sub.metadata.artifact_id,
+                artifact_id,
+                own_group_id,
+                own_version,
+            )
+
+        return own_group_id, own_version
+
+    def _materialize_directories(
+        self, module_dir: Path, structure: DirectoryStructure
+    ) -> None:
+        role_dirs: dict[DirectoryRole, list[str]] = {
+            "source": structure.source_dirs,
+            "test-source": structure.test_dirs,
+            "resource": structure.resource_dirs,
+            "test-resource": structure.test_resource_dirs,
+        }
+        for role, dirs in role_dirs.items():
+            for rel_dir in dirs:
+                (module_dir / rel_dir).mkdir(parents=True, exist_ok=True)
+                if rel_dir != STANDARD_DIRS[role]:
+                    self._writer.register_directory_role(
+                        module_dir / "pom.xml", rel_dir, role
+                    )
