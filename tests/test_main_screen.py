@@ -366,6 +366,98 @@ async def test_structure_panel_remove_missing_directory_is_a_no_op(
         assert screen.project is project_before
 
 
+async def test_structure_panel_registers_build_source(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+
+        # cria o diretorio do checklist (indice 0 = src/main/java) antes de
+        # registrar - register_directory_role exige que ja exista.
+        await pilot.press("enter")
+        await pilot.pause()
+
+        await pilot.press("b")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "BuildSourceFormScreen"
+        form.query_one("#field-path", Input).value = "src/main/java"
+        form.query_one("#field-role", Input).value = "source"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        pom_path = project_root / active_module.relative_path / "pom.xml"
+        pom_text = pom_path.read_text()
+        assert "build-helper-maven-plugin" in pom_text
+        assert "<source>src/main/java</source>" in pom_text
+
+
+async def test_build_source_form_rejects_invalid_role(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+
+        form = app.screen
+        form.query_one("#field-path", Input).value = "src/main/java"
+        form.query_one("#field-role", Input).value = "not-a-role"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert type(app.screen).__name__ == "BuildSourceFormScreen"
+
+
+async def test_build_source_form_cancel_does_not_change_anything(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+        project_before = screen.project
+
+        await pilot.press("5")
+        await pilot.pause()
+        await pilot.press("b")
+        await pilot.pause()
+
+        await pilot.click("#form-cancel")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is project_before
+
+
 async def test_structure_panel_creates_custom_directory(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")
