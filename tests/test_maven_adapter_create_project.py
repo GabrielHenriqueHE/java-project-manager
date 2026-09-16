@@ -182,13 +182,14 @@ def test_create_project_rejects_duplicate_module_names(tmp_path):
     assert not (tmp_path / "demo").exists()
 
 
-def test_create_project_rejects_more_than_one_bom_module(tmp_path):
-    managed_dep = Dependency(
-        group_id="org.apache.commons",
-        artifact_id="commons-lang3",
-        version="3.14.0",
-        managed=True,
-    )
+def test_create_project_allows_more_than_one_pom_module_with_managed_dependencies(
+    tmp_path,
+):
+    """Regressao: Maven nao limita dependencyManagement a um unico modulo -
+    um projeto real pode ter o root importando um BOM externo (scope=import)
+    alem do proprio submodulo BOM interno. A ferramenta nao deve inventar
+    uma restricao que o Maven nao tem (bug relatado: exportar um projeto
+    assim e tentar recria-lo falhava com 'Mais de um modulo BOM')."""
     manifest = ModuleManifest(
         metadata=ProjectMetadata(
             artifact_id="demo",
@@ -196,22 +197,37 @@ def test_create_project_rejects_more_than_one_bom_module(tmp_path):
             version="1.0.0",
             packaging="pom",
         ),
+        dependencies=[
+            Dependency(
+                group_id="org.springframework.boot",
+                artifact_id="spring-boot-dependencies",
+                version="3.2.0",
+                type="pom",
+                scope="import",
+                managed=True,
+            )
+        ],
         submodules=[
             ModuleManifest(
-                metadata=ProjectMetadata(artifact_id="bom-a", packaging="pom"),
-                dependencies=[managed_dep],
+                metadata=ProjectMetadata(artifact_id="demo-bom", packaging="pom"),
+                dependencies=[
+                    Dependency(
+                        group_id="org.apache.commons",
+                        artifact_id="commons-lang3",
+                        version="3.14.0",
+                        managed=True,
+                    )
+                ],
             ),
-            ModuleManifest(
-                metadata=ProjectMetadata(artifact_id="bom-b", packaging="pom"),
-                dependencies=[managed_dep],
-            ),
+            ModuleManifest(metadata=ProjectMetadata(artifact_id="core")),
         ],
     )
 
-    with pytest.raises(ValueError, match="Mais de um modulo BOM"):
-        MavenAdapter().create_project(manifest, tmp_path / "demo")
+    project = MavenAdapter().create_project(manifest, tmp_path / "demo")
 
-    assert not (tmp_path / "demo").exists()
+    modules = {m.name: m for m in _flatten(project.root_module)}
+    assert modules["demo"].is_bom is True
+    assert modules["demo-bom"].is_bom is True
 
 
 def test_create_project_rejects_managed_dependency_without_version(tmp_path):

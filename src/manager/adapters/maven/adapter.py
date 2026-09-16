@@ -458,15 +458,8 @@ class MavenAdapter(BuildToolAdapter):
         return self.infer_structure(destination_path)
 
     def _validate_maven_manifest(
-        self,
-        module: ModuleManifest,
-        *,
-        is_root: bool,
-        bom_count: list[int] | None = None,
+        self, module: ModuleManifest, *, is_root: bool
     ) -> None:
-        if bom_count is None:
-            bom_count = [0]
-
         if is_root and (not module.metadata.group_id or not module.metadata.version):
             raise ValueError(
                 "Modulo raiz nao tem parent para herdar: "
@@ -474,14 +467,6 @@ class MavenAdapter(BuildToolAdapter):
             )
 
         is_bom = is_bom_manifest(module)
-        if is_bom:
-            bom_count[0] += 1
-            if bom_count[0] > 1:
-                raise ValueError(
-                    "Mais de um modulo BOM (packaging pom + dependencia managed) "
-                    "no manifesto; o projeto so pode ter um"
-                )
-
         if (module.submodules or is_bom) and module.metadata.packaging != "pom":
             raise ValueError(
                 f"Modulo '{module.metadata.artifact_id}' tem submodulos ou e BOM; "
@@ -496,7 +481,7 @@ class MavenAdapter(BuildToolAdapter):
                 )
 
         for sub in module.submodules:
-            self._validate_maven_manifest(sub, is_root=False, bom_count=bom_count)
+            self._validate_maven_manifest(sub, is_root=False)
 
     def _materialize(
         self,
