@@ -9,6 +9,7 @@ from textual.widgets import Footer, ListView, Static
 from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
 from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
 from manager.screens.create_project import CreateProjectScreen
+from manager.screens.export_manifest import ExportManifestScreen
 from manager.screens.import_project import ImportProjectScreen
 from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
@@ -154,6 +155,12 @@ class MainScreen(Screen):
                 self.select_project(entries[-1])
 
         self.app.push_screen(CreateProjectScreen(self.registry), _on_dismiss)
+
+    def export_project(self) -> None:
+        if self.project is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        self.app.push_screen(ExportManifestScreen(self.project))
 
     def remove_project(self, entry: RegistryEntry | None) -> None:
         if entry is None:

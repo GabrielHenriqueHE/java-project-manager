@@ -152,6 +152,48 @@ async def test_cancel_create_project_creates_nothing(tmp_path):
         assert screen.project is None
 
 
+async def test_export_project_writes_manifest_yaml(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+    destination = tmp_path / "manifest.yaml"
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("e")
+        await pilot.pause()
+
+        export_screen = app.screen
+        export_screen.query_one("#destination-input", Input).value = str(destination)
+        await pilot.click("#confirm-export")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert destination.is_file()
+        assert "multi-module-demo" in destination.read_text()
+        assert screen.project is not None  # exportar nao altera o projeto aberto
+
+
+async def test_export_project_without_project_selected_shows_error(tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("e")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)  # form nao abriu
+        assert screen.project is None
+
+
 async def test_navigating_modules_updates_metadata_panel(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")

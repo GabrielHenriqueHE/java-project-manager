@@ -15,6 +15,7 @@ class ProjectsPanel(Panel):
     BINDINGS = [
         ("n", "import_project", "novo"),
         ("c", "create_project", "criar"),
+        ("e", "export_project", "exportar"),
         ("d", "remove_project", "remover"),
         ("j", "cursor_down", "mover"),
         ("k", "cursor_up", "mover"),
@@ -80,6 +81,9 @@ class ProjectsPanel(Panel):
 
     def action_create_project(self) -> None:
         self.screen.create_project()
+
+    def action_export_project(self) -> None:
+        self.screen.export_project()
 
     def action_remove_project(self) -> None:
         index = self.query_one("#projects-list", ListView).index
