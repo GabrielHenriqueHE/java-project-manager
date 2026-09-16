@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from manager.models import Dependency, DirectoryStructure, ProjectMetadata
+from manager.models import Dependency, DirectoryStructure, Module, ProjectMetadata
 
 
 class ModuleManifest(BaseModel):
@@ -21,6 +21,30 @@ class ModuleManifest(BaseModel):
     dependencies: list[Dependency] = Field(default_factory=list)
     directory_structure: DirectoryStructure = Field(default_factory=DirectoryStructure)
     submodules: list["ModuleManifest"] = Field(default_factory=list)
+
+
+def to_manifest(module: Module) -> ModuleManifest:
+    """Converte um Module ja inferido (uniforme entre build tools) para o
+    formato de manifesto - inverso de como create_project materializa um
+    ModuleManifest. Descarta os campos que so existem em disco
+    (relative_path, build_file) e o `tree` de DirectoryStructure (so serve
+    para exibicao da arvore no Painel [5]; create_project nunca le `tree`
+    na materializacao).
+    """
+    directory_structure = module.directory_structure.model_copy(update={"tree": None})
+    return ModuleManifest(
+        metadata=module.metadata,
+        dependencies=module.dependencies,
+        directory_structure=directory_structure,
+        submodules=[to_manifest(sub) for sub in module.submodules],
+    )
+
+
+def dump_manifest(manifest: ModuleManifest, path: Path) -> None:
+    """Serializa o manifesto para YAML em path, sobrescrevendo se existir."""
+    data = manifest.model_dump(mode="json", exclude_defaults=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
 
 
 def load_manifest(path: Path) -> ModuleManifest:
