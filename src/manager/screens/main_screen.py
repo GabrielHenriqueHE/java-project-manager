@@ -11,6 +11,7 @@ from manager.models import BuildFile, Dependency, Module, Project, ProjectMetada
 from manager.screens.import_project import ImportProjectScreen
 from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
+from manager.screens.widgets.build_source_form import BuildSourceFormScreen
 from manager.screens.widgets.command_bar import CommandBar
 from manager.screens.widgets.confirm_dialog import ConfirmModal
 from manager.screens.widgets.dependency_form import DependencyFormScreen
@@ -323,6 +324,27 @@ class MainScreen(Screen):
             return
         self.notify(f"'{relative_path}' removido")
         self.set_project(updated)
+
+    def register_build_source(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+
+        def _on_submit(result: tuple[str, str] | None) -> None:
+            if result is None:
+                return
+            relative_path, role = result
+            try:
+                updated = self._adapter.register_directory_role(
+                    self.project, module.name, Path(relative_path), role
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify(f"'{relative_path}' registrado como {role} no build")
+            self.set_project(updated)
+
+        self.app.push_screen(BuildSourceFormScreen(), _on_submit)
 
     # ---- navegacao entre paineis ----
 
