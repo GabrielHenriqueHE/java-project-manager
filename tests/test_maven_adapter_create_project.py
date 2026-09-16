@@ -296,3 +296,81 @@ def test_create_project_allows_existing_empty_destination(tmp_path):
     project = MavenAdapter().create_project(manifest, destination)
 
     assert project.root_module.name == "demo"
+
+
+def test_create_project_with_source_root_copies_real_files(tmp_path):
+    source_root = tmp_path / "snapshot"
+    java_dir = source_root / "core" / "src" / "main" / "java" / "com" / "example"
+    java_dir.mkdir(parents=True)
+    (java_dir / "Core.java").write_text("package com.example;\nclass Core {}\n")
+
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo",
+            group_id="com.example",
+            version="1.0.0",
+            packaging="pom",
+        ),
+        submodules=[
+            ModuleManifest(
+                metadata=ProjectMetadata(artifact_id="core"),
+                directory_structure=DirectoryStructure(
+                    source_dirs=["src/main/java"],
+                    test_dirs=[],
+                    resource_dirs=[],
+                    test_resource_dirs=[],
+                ),
+            ),
+        ],
+    )
+
+    project = MavenAdapter().create_project(
+        manifest, tmp_path / "created", source_root=source_root
+    )
+
+    copied = (
+        tmp_path
+        / "created"
+        / "core"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "example"
+        / "Core.java"
+    )
+    assert copied.is_file()
+    assert copied.read_text() == "package com.example;\nclass Core {}\n"
+    assert project.root_module.name == "demo"
+
+
+def test_create_project_without_matching_snapshot_falls_back_to_mkdir(tmp_path):
+    source_root = tmp_path / "snapshot"
+    source_root.mkdir()  # existe, mas sem subpasta para "core"
+
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0", packaging="pom"
+        ),
+        submodules=[ModuleManifest(metadata=ProjectMetadata(artifact_id="core"))],
+    )
+
+    project = MavenAdapter().create_project(
+        manifest, tmp_path / "created", source_root=source_root
+    )
+
+    core = next(m for m in _flatten(project.root_module) if m.name == "core")
+    assert (tmp_path / "created" / "core" / "src" / "main" / "java").is_dir()
+    assert core.directory_structure.source_dirs == ["src/main/java"]
+
+
+def test_create_project_without_source_root_behaves_as_before(tmp_path):
+    manifest = ModuleManifest(
+        metadata=ProjectMetadata(
+            artifact_id="demo", group_id="com.example", version="1.0.0"
+        )
+    )
+
+    project = MavenAdapter().create_project(manifest, tmp_path / "demo")
+
+    assert project.root_module.name == "demo"

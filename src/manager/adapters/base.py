@@ -36,7 +36,11 @@ class BuildToolAdapter(ABC):
 
     @abstractmethod
     def create_project(
-        self, manifest: ModuleManifest, destination_path: Path
+        self,
+        manifest: ModuleManifest,
+        destination_path: Path,
+        *,
+        source_root: Path | None = None,
     ) -> Project:
         """Materializa um projeto novo em destination_path a partir de manifest.
 
@@ -45,6 +49,11 @@ class BuildToolAdapter(ABC):
         estiver vazio, ou se o manifesto for invalido (nomes duplicados,
         campos obrigatorios ausentes, regras especificas da build tool).
         Retorna sempre infer_structure(destination_path).
+
+        Se source_root for informado, para cada diretorio que seria criado
+        vazio, copia de source_root/<artifactId>/<caminho-relativo> quando
+        essa pasta existir, preservando codigo-fonte real em vez de so
+        criar o diretorio vazio.
         """
 
     @abstractmethod

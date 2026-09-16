@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from lxml import etree
@@ -443,7 +444,11 @@ class MavenAdapter(BuildToolAdapter):
         return self.infer_structure(project.root_path)
 
     def create_project(
-        self, manifest: ModuleManifest, destination_path: Path
+        self,
+        manifest: ModuleManifest,
+        destination_path: Path,
+        *,
+        source_root: Path | None = None,
     ) -> Project:
         validate_manifest_tree(manifest)
         self._validate_maven_manifest(manifest, is_root=True)
@@ -453,7 +458,7 @@ class MavenAdapter(BuildToolAdapter):
             raise ValueError(f"'{destination_path}' ja existe e nao esta vazio")
         destination_path.mkdir(parents=True, exist_ok=True)
 
-        self._materialize(manifest, destination_path, None, None, None)
+        self._materialize(manifest, destination_path, None, None, None, source_root)
 
         return self.infer_structure(destination_path)
 
@@ -490,6 +495,7 @@ class MavenAdapter(BuildToolAdapter):
         parent_artifact_id: str | None,
         effective_group_id: str | None,
         effective_version: str | None,
+        source_root: Path | None,
     ) -> tuple[str | None, str | None]:
         artifact_id = module.metadata.artifact_id
         submodule_names = [
@@ -540,7 +546,9 @@ class MavenAdapter(BuildToolAdapter):
                 submodule_names=submodule_names,
             )
 
-        self._materialize_directories(module_dir, module.directory_structure)
+        self._materialize_directories(
+            module_dir, module.directory_structure, source_root, artifact_id
+        )
 
         for sub in module.submodules:
             self._materialize(
@@ -549,13 +557,19 @@ class MavenAdapter(BuildToolAdapter):
                 artifact_id,
                 own_group_id,
                 own_version,
+                source_root,
             )
 
         return own_group_id, own_version
 
     def _materialize_directories(
-        self, module_dir: Path, structure: DirectoryStructure
+        self,
+        module_dir: Path,
+        structure: DirectoryStructure,
+        source_root: Path | None,
+        artifact_id: str,
     ) -> None:
+        module_snapshot = (source_root / artifact_id) if source_root else None
         role_dirs: dict[DirectoryRole, list[str]] = {
             "source": structure.source_dirs,
             "test-source": structure.test_dirs,
@@ -564,7 +578,12 @@ class MavenAdapter(BuildToolAdapter):
         }
         for role, dirs in role_dirs.items():
             for rel_dir in dirs:
-                (module_dir / rel_dir).mkdir(parents=True, exist_ok=True)
+                target = module_dir / rel_dir
+                snapshot = (module_snapshot / rel_dir) if module_snapshot else None
+                if snapshot is not None and snapshot.is_dir():
+                    shutil.copytree(snapshot, target, dirs_exist_ok=True)
+                else:
+                    target.mkdir(parents=True, exist_ok=True)
                 if rel_dir != STANDARD_DIRS[role]:
                     self._writer.register_directory_role(
                         module_dir / "pom.xml", rel_dir, role

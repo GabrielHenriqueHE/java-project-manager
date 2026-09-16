@@ -2,7 +2,12 @@ import shutil
 from pathlib import Path
 
 from manager.adapters.maven.adapter import MavenAdapter
-from manager.manifest import dump_manifest, load_manifest, to_manifest
+from manager.manifest import (
+    dump_manifest,
+    export_source_files,
+    load_manifest,
+    to_manifest,
+)
 from manager.models import Module
 
 FIXTURE_SOURCE = Path(__file__).parent / "fixtures" / "maven-multi-module"
@@ -67,3 +72,62 @@ def test_export_then_create_project_reproduces_equivalent_structure(tmp_path):
         for dep in recreated_project.managed_dependencies
     )
     assert original_managed == recreated_managed
+
+
+def test_export_with_source_pattern_then_create_project_reproduces_file_content(
+    tmp_path,
+):
+    original_root = tmp_path / "original"
+    shutil.copytree(FIXTURE_SOURCE, original_root)
+    adapter = MavenAdapter()
+
+    original_project = adapter.infer_structure(original_root)
+    manifest = to_manifest(original_project.root_module)
+    manifest_path = tmp_path / "manifest.yaml"
+    dump_manifest(manifest, manifest_path)
+
+    matched = export_source_files(original_project, manifest_path, "core")
+    assert matched == ["core"]
+
+    loaded_manifest = load_manifest(manifest_path)
+    source_root = manifest_path.parent / f"{manifest_path.stem}.files"
+    recreated_project = adapter.create_project(
+        loaded_manifest, tmp_path / "recreated", source_root=source_root
+    )
+
+    original_java = (
+        original_root
+        / "core"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "example"
+        / "core"
+        / "Core.java"
+    )
+    recreated_java = (
+        tmp_path
+        / "recreated"
+        / "core"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "example"
+        / "core"
+        / "Core.java"
+    )
+    assert recreated_java.read_text() == original_java.read_text()
+
+    # api nao bateu com o padrao "core" - continua so com diretorio vazio
+    api_java_dir = tmp_path / "recreated" / "api" / "src" / "main" / "java"
+    assert api_java_dir.is_dir()
+    assert not any(api_java_dir.rglob("*.java"))
+
+    recreated_names = {
+        m.metadata.artifact_id for m in _flatten(recreated_project.root_module)
+    }
+    assert recreated_names == {
+        m.metadata.artifact_id for m in _flatten(original_project.root_module)
+    }
