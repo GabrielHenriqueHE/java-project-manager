@@ -40,8 +40,8 @@ def validate_manifest_tree(root: ModuleManifest) -> None:
     """Validacoes estruturais agnosticas de build tool (nomes duplicados).
     Validacoes especificas de Maven (groupId/version obrigatorios na raiz,
     packaging=pom para quem tem submodulos/e BOM, version obrigatoria em
-    dependencia managed, no maximo um BOM na arvore) ficam em
-    MavenAdapter._validate_manifest, chamada depois desta."""
+    dependencia managed) ficam em MavenAdapter._validate_manifest, chamada
+    depois desta."""
     seen: set[str] = set()
 
     def walk(module: ModuleManifest) -> None:
@@ -131,7 +131,8 @@ Percorre a árvore recursivamente e levanta `ValueError` (mensagens no mesmo est
 - **Raiz sem `group_id`/`version`**: raiz não tem `<parent>` de quem herdar — mesma regra de `update_metadata` ("Modulo raiz nao tem parent para herdar: groupId e version sao obrigatorios").
 - **Módulo com submódulos ou que é BOM (`is_bom_manifest`) com `packaging != "pom"`** — mesma regra de `update_metadata` para módulo com submódulos/BOM.
 - **Dependência `managed=True` sem `version`** — mesma regra de `update_dependency`.
-- **Mais de um módulo com `is_bom_manifest(module) is True` na árvore inteira** — regra nova desta fatia: o domínio assume um único BOM por projeto (`_find_bom_module` retorna o primeiro encontrado); um manifesto com dois módulos BOM seria ambíguo.
+
+**Não** valida "no máximo um módulo BOM" — essa regra existiu numa versão anterior desta fatia e foi removida por ser incorreta: Maven não limita `<dependencyManagement>` a um único módulo (ex.: o root de um projeto real frequentemente importa um BOM externo via `scope=import` *além* de ter seu próprio submódulo BOM interno). `is_bom_manifest`/`Module.is_bom` são só uma heurística informativa (packaging=pom + alguma dependência managed) usada por `_find_bom_module` para escolher **um** módulo alvo em `remove_module`/`remove_dependency` (tolerante — pega o primeiro encontrado); nunca foi uma invariante que `create_project` devesse impor como erro. Ver "Bug encontrado e corrigido" em `tasks.md`.
 
 ### `_materialize` (recursivo, escreve em disco)
 
