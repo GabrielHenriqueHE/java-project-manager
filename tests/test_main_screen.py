@@ -179,6 +179,62 @@ async def test_export_project_writes_manifest_yaml(project_root, tmp_path):
         assert screen.project is not None  # exportar nao altera o projeto aberto
 
 
+async def test_export_with_source_pattern_then_create_project_copies_files(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+    manifest_path = tmp_path / "manifest.yaml"
+    created_destination = tmp_path / "created"
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("e")
+        await pilot.pause()
+
+        export_screen = app.screen
+        export_screen.query_one("#destination-input", Input).value = str(manifest_path)
+        export_screen.query_one("#source-pattern-input", Input).value = "core"
+        await pilot.click("#confirm-export")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        files_root = tmp_path / "manifest.files"
+        assert (files_root / "core").is_dir()
+        assert not (files_root / "api").exists()
+
+        await pilot.press("1")
+        await pilot.press("c")
+        await pilot.pause()
+
+        create_screen = app.screen
+        create_screen.query_one("#manifest-input", Input).value = str(manifest_path)
+        create_screen.query_one("#destination-input", Input).value = str(
+            created_destination
+        )
+        await pilot.click("#confirm-create")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        copied_java = (
+            created_destination
+            / "core"
+            / "src"
+            / "main"
+            / "java"
+            / "com"
+            / "example"
+            / "core"
+            / "Core.java"
+        )
+        assert copied_java.is_file()
+
+
 async def test_export_project_without_project_selected_shows_error(tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     app = _TestApp(registry)

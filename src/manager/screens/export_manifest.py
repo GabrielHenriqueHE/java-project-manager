@@ -6,7 +6,7 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
 
-from manager.manifest import dump_manifest, to_manifest
+from manager.manifest import dump_manifest, export_source_files, to_manifest
 from manager.models import Project
 
 
@@ -28,13 +28,15 @@ class ExportManifestScreen(Screen[bool]):
         yield Vertical(
             Static(f"Exportar '{self._project.name}' para:"),
             Input(placeholder="/caminho/para/manifest.yaml", id="destination-input"),
+            Static("Padrão de módulos p/ incluir código-fonte (opcional):"),
+            Input(placeholder="ex.: shared-*", id="source-pattern-input"),
             Static(id="export-feedback"),
             Button("Exportar", id="confirm-export", variant="primary"),
             id="export-form",
         )
         yield Footer()
 
-    @on(Input.Submitted, "#destination-input")
+    @on(Input.Submitted)
     def _submit_via_enter(self) -> None:
         self._do_export()
 
@@ -57,7 +59,22 @@ class ExportManifestScreen(Screen[bool]):
             feedback.update(f"[red]Falha ao exportar: {exc}[/red]")
             return
 
-        feedback.update(f"[green]Exportado para {path}[/green]")
+        pattern = self.query_one("#source-pattern-input", Input).value.strip()
+        if pattern:
+            matched = export_source_files(self._project, path, pattern)
+            if matched:
+                feedback.update(
+                    f"[green]Exportado para {path} "
+                    f"(código-fonte: {', '.join(matched)})[/green]"
+                )
+            else:
+                feedback.update(
+                    f"[yellow]Exportado para {path} "
+                    f"(nenhum módulo bateu com '{pattern}')[/yellow]"
+                )
+        else:
+            feedback.update(f"[green]Exportado para {path}[/green]")
+
         self.set_timer(0.6, self._finish)
 
     def _finish(self) -> None:

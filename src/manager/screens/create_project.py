@@ -77,8 +77,12 @@ class CreateProjectScreen(Screen[bool]):
             return
 
         destination = Path(raw_destination).expanduser()
+        files_dir = manifest_path.parent / f"{manifest_path.stem}.files"
+        source_root = files_dir if files_dir.is_dir() else None
         try:
-            project = self._adapter.create_project(manifest, destination)
+            project = self._adapter.create_project(
+                manifest, destination, source_root=source_root
+            )
         except ValueError as exc:
             feedback.update(f"[red]{exc}[/red]")
             return
