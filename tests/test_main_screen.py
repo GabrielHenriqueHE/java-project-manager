@@ -78,6 +78,80 @@ async def test_import_project_populates_all_panels(project_root, tmp_path):
         assert "commons-lang3" in bom_names
 
 
+async def test_create_project_via_manifest_form_materializes_and_selects(tmp_path):
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text("""
+metadata:
+  artifact_id: novo-projeto
+  group_id: com.example
+  version: "1.0.0"
+""")
+    destination = tmp_path / "novo-projeto"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("c")
+        await pilot.pause()
+
+        create_screen = app.screen
+        create_screen.query_one("#manifest-input", Input).value = str(manifest_path)
+        create_screen.query_one("#destination-input", Input).value = str(destination)
+        await pilot.click("#confirm-create")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is not None
+        assert screen.project.name == "novo-projeto"
+        assert (destination / "pom.xml").is_file()
+
+
+async def test_create_project_with_invalid_manifest_keeps_form_open(tmp_path):
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text("metadata:\n  artifact_id: demo\n")  # sem group/version
+    destination = tmp_path / "demo"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("c")
+        await pilot.pause()
+
+        create_screen = app.screen
+        create_screen.query_one("#manifest-input", Input).value = str(manifest_path)
+        create_screen.query_one("#destination-input", Input).value = str(destination)
+        await pilot.click("#confirm-create")
+        await pilot.pause()
+
+        assert app.screen is create_screen
+        assert "groupId" in str(create_screen.query_one("#create-feedback").content)
+        assert not destination.exists()
+
+
+async def test_cancel_create_project_creates_nothing(tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("c")
+        await pilot.pause()
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is None
+
+
 async def test_navigating_modules_updates_metadata_panel(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")

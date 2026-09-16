@@ -8,6 +8,7 @@ from textual.widgets import Footer, ListView, Static
 
 from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
 from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
+from manager.screens.create_project import CreateProjectScreen
 from manager.screens.import_project import ImportProjectScreen
 from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
@@ -142,6 +143,17 @@ class MainScreen(Screen):
                     self.select_project(entries[-1])
 
         self.app.push_screen(ImportProjectScreen(self.registry), _on_dismiss)
+
+    def create_project(self) -> None:
+        def _on_dismiss(created: bool | None) -> None:
+            if not created:
+                return
+            self._reload_projects()
+            entries = self.registry.load()
+            if entries:
+                self.select_project(entries[-1])
+
+        self.app.push_screen(CreateProjectScreen(self.registry), _on_dismiss)
 
     def remove_project(self, entry: RegistryEntry | None) -> None:
         if entry is None:
