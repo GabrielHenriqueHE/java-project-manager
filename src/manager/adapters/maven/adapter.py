@@ -8,6 +8,7 @@ from manager.adapters.base import (
     DependentModuleConflict,
     DirectoryNotEmptyConflict,
 )
+from manager.adapters.common.lookup import find_module, resolve_module_relative_path
 from manager.adapters.maven.directory import (
     STANDARD_DIRS,
     detect_directory_structure,
@@ -261,22 +262,10 @@ class MavenAdapter(BuildToolAdapter):
     def _resolve_module_relative_path(
         self, project: Project, target: Module, relative_path: Path
     ) -> Path:
-        module_dir = (project.root_path / target.relative_path).resolve()
-        target_path = (module_dir / relative_path).resolve()
-        if module_dir not in (target_path, *target_path.parents):
-            raise ValueError(
-                f"'{relative_path}' escapa do diretorio do modulo '{target.name}'"
-            )
-        return target_path
+        return resolve_module_relative_path(project, target, relative_path)
 
     def _find_module(self, module: Module, name: str) -> Module | None:
-        if module.name == name:
-            return module
-        for sub in module.submodules:
-            found = self._find_module(sub, name)
-            if found is not None:
-                return found
-        return None
+        return find_module(module, name)
 
     def _find_parent(self, module: Module, target: Module) -> Module | None:
         for sub in module.submodules:

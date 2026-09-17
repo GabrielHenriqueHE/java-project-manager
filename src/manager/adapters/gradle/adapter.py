@@ -1,6 +1,8 @@
+import shutil
 from pathlib import Path
 
-from manager.adapters.base import BuildToolAdapter
+from manager.adapters.base import BuildToolAdapter, DirectoryNotEmptyConflict
+from manager.adapters.common.lookup import find_module, resolve_module_relative_path
 from manager.adapters.gradle.directory import detect_directory_structure
 from manager.adapters.gradle.parser import (
     ParsedGradleBuild,
@@ -24,12 +26,16 @@ _STUB_MESSAGE = "{method} ainda nao implementado para Gradle - fase futura"
 
 
 class GradleAdapter(BuildToolAdapter):
-    """Suporte de leitura a projetos Gradle (Groovy e Kotlin DSL).
+    """Suporte a projetos Gradle (Groovy e Kotlin DSL).
 
-    Fase 15 (fundacao): so `detect`/`infer_structure`. Mutacoes (criar
-    projeto, adicionar/remover modulo, dependencias, diretorios) sao
-    stubs `NotImplementedError` - mesmo padrao usado pelo MavenAdapter na
-    sua Fase 1, antes das mutacoes reais chegarem em fatias seguintes.
+    Fase 15 (fundacao): `detect`/`infer_structure`. Fase 16: primeira
+    mutacao real, `add_directory`/`remove_directory` - nao exigem editar
+    build.gradle(.kts) (diretorios-padrao nao precisam ser declarados no
+    Gradle, ao contrario do Maven), entao sao puramente filesystem +
+    `infer_structure`, mesmo comportamento do MavenAdapter. As demais
+    mutacoes (criar projeto, adicionar/remover modulo, dependencias,
+    registro de diretorio customizado) seguem como stubs
+    `NotImplementedError` - fatias futuras.
     """
 
     build_tool = "gradle"
@@ -178,7 +184,18 @@ class GradleAdapter(BuildToolAdapter):
     def add_directory(
         self, project: Project, module_name: str, relative_path: Path
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="add_directory"))
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        target_path = resolve_module_relative_path(project, target, relative_path)
+
+        if target_path.exists():
+            raise ValueError(f"'{relative_path}' ja existe")
+
+        target_path.mkdir(parents=True)
+
+        return self.infer_structure(project.root_path)
 
     def remove_directory(
         self,
@@ -188,7 +205,27 @@ class GradleAdapter(BuildToolAdapter):
         *,
         force: bool = False,
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="remove_directory"))
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        target_path = resolve_module_relative_path(project, target, relative_path)
+
+        module_dir = (project.root_path / target.relative_path).resolve()
+        if target_path == module_dir:
+            raise ValueError("Nao e possivel remover o diretorio raiz do modulo")
+
+        if not target_path.exists():
+            raise ValueError(f"'{relative_path}' nao existe")
+
+        if any(target_path.iterdir()):
+            if not force:
+                raise DirectoryNotEmptyConflict(str(relative_path))
+            shutil.rmtree(target_path)
+        else:
+            target_path.rmdir()
+
+        return self.infer_structure(project.root_path)
 
     def remove_dependency(
         self, project: Project, group_id: str, artifact_id: str

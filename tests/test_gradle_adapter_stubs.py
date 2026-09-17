@@ -38,16 +38,6 @@ def test_update_metadata_is_a_stub(project):
         GradleAdapter().update_metadata(project, "core", None)
 
 
-def test_add_directory_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().add_directory(project, "core", Path("src/main/proto"))
-
-
-def test_remove_directory_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().remove_directory(project, "core", Path("src/main/proto"))
-
-
 def test_remove_dependency_is_a_stub(project):
     with pytest.raises(NotImplementedError):
         GradleAdapter().remove_dependency(project, "com.example", "core")
