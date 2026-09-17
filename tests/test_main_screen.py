@@ -79,6 +79,41 @@ async def test_import_project_populates_all_panels(project_root, tmp_path):
         assert "commons-lang3" in bom_names
 
 
+async def test_import_gradle_project_populates_all_panels(tmp_path):
+    gradle_root = tmp_path / "gradle-project"
+    shutil.copytree(
+        Path(__file__).parent / "fixtures" / "gradle-multi-module-groovy", gradle_root
+    )
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("n")
+        await pilot.pause()
+
+        import_screen = app.screen
+        import_screen.query_one("#path-input", Input).value = str(gradle_root)
+        await pilot.press("enter")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is not None
+        assert screen.project.build_tool == "gradle"
+        assert screen.project.name == "multi-module-demo"
+
+        module_names = {screen.project.root_module.name} | {
+            m.name for m in screen.project.root_module.submodules
+        }
+        assert module_names == {"multi-module-demo", "bom", "core", "api"}
+
+        bom_names = {dep.artifact_id for dep in screen.project.managed_dependencies}
+        assert "commons-lang3" in bom_names
+
+
 async def test_clone_project_populates_all_panels(project_root, tmp_path):
     # git trata um path local como URL valida - nao precisa de rede/servico
     # remoto de verdade para exercitar o fluxo completo.

@@ -1,9 +1,10 @@
 from pathlib import Path
 
 from manager.adapters.base import BuildToolAdapter
+from manager.adapters.gradle.adapter import GradleAdapter
 from manager.adapters.maven.adapter import MavenAdapter
 
-_ADAPTERS: list[BuildToolAdapter] = [MavenAdapter()]
+_ADAPTERS: list[BuildToolAdapter] = [MavenAdapter(), GradleAdapter()]
 
 
 def detect_adapter(root_path: Path) -> BuildToolAdapter | None:

@@ -1,0 +1,13 @@
+plugins {
+    id("java-platform")
+}
+
+group = "com.example"
+version = "1.0.0"
+
+dependencies {
+    constraints {
+        api("org.apache.commons:commons-lang3:3.14.0")
+        api("com.example:core:1.0.0")
+    }
+}

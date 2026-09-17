@@ -1,6 +1,6 @@
 # Java Project Manager (jpm)
 
-Aplicação TUI para gerenciar projetos Java (criação, metadados, módulos, estrutura de diretórios) de forma independente da build tool utilizada. Hoje suporta Maven; a arquitetura (modelo de domínio + adapters) foi feita para acomodar outras build tools no futuro.
+Aplicação TUI para gerenciar projetos Java (criação, metadados, módulos, estrutura de diretórios) de forma independente da build tool utilizada. Maven tem suporte completo (leitura + escrita); Gradle (Groovy e Kotlin DSL) tem suporte de leitura/navegação, com mutações ainda pendentes.
 
 Veja `specs/00-overview.md` para o contexto completo do produto, o glossário e o log de decisões arquiteturais. O desenvolvimento segue um fluxo de Spec-Driven Development leve, documentado em `specs/`.
 
@@ -48,5 +48,6 @@ uv run pytest
 - **Fase 12 — Dependência Direta na TUI** (concluída): Painel [4] BOM+Dependências ganhou uma seção com as dependências diretas do módulo selecionado no Painel [3]; `m` adiciona/edita uma dependência direta (`managed=False`) desse módulo, qualquer que seja o `packaging` (sem mudança no adapter, que já suportava isso desde a Fase 2).
 - **Fase 13 — Clonar Repositório Remoto** (concluída): `g` no Painel [1] clona um repositório via `git clone` (requer `git` instalado no sistema) e registra o projeto resultante, reaproveitando o mesmo fluxo de detecção/inferência do import de um path local.
 - **Fase 14 — Remover Dependência Direta na TUI** (concluída): `r` no Painel [4] remove uma dependência direta (`managed=False`) do módulo selecionado, identificada por `groupId:artifactId` num formulário dedicado.
+- **Fase 15 — Gradle: Fundação (Leitura)** (concluída): novo `GradleAdapter` (`detect`/`infer_structure`), suportando Groovy (`build.gradle`) e Kotlin DSL (`build.gradle.kts`). Projetos Gradle já podem ser importados/clonados e navegados na TUI existente — nenhum painel mudou. Mutações (criar módulo, editar dependência, etc.) ainda são stubs, pendentes de fatias futuras.
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.
