@@ -8,4 +8,4 @@ Coberto pela **Fase 1** (registrar, listar, abrir em modo leitura, remover) — 
 
 **Código-fonte na exportação implementado** na Fase 8 (`specs/phases/phase-8-codigo-fonte-exportacao/`): `export_source_files` (`src/manager/manifest.py`) copia os diretórios rastreados dos módulos que batem com um padrão de nome (glob, ex. `shared-*`) para uma pasta irmã do manifesto (`<manifest>.files/<artifactId>/...`); `create_project` ganhou `source_root` opcional para copiar esses arquivos reais em vez de só criar diretórios vazios ao recriar o projeto. TUI: campo de padrão no formulário de exportação; detecção automática da pasta `.files` no formulário de criação.
 
-Fora da Fase 8 (fases futuras): clone remoto.
+**Clone remoto implementado** na Fase 13 (`specs/phases/phase-13-clonar-remoto/`): novo módulo de serviço `src/manager/services/git.py` (`clone_repository`, shell-out a `git clone` via `subprocess`, sem dependência Python nova) e `CloneProjectScreen` (`screens/clone_project.py`), que clona e, em caso de sucesso, segue o mesmo fluxo de `ImportProjectScreen` (detectar build tool, inferir estrutura, `ProjectRegistry.add`). TUI: Painel [1] PROJETOS, binding `g`.

@@ -12,6 +12,7 @@ from manager.adapters.base import (
     DirectoryNotEmptyConflict,
 )
 from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
+from manager.screens.clone_project import CloneProjectScreen
 from manager.screens.create_project import CreateProjectScreen
 from manager.screens.export_manifest import ExportManifestScreen
 from manager.screens.import_project import ImportProjectScreen
@@ -137,17 +138,20 @@ class MainScreen(Screen):
 
     # ---- acoes chamadas pelos paineis ----
 
-    def import_project(self) -> None:
-        def _on_dismiss(imported: bool | None) -> None:
-            if not imported:
-                return
-            self._reload_projects()
-            if self.project is None:
-                entries = self.registry.load()
-                if entries:
-                    self.select_project(entries[-1])
+    def _on_project_registered(self, registered: bool | None) -> None:
+        if not registered:
+            return
+        self._reload_projects()
+        if self.project is None:
+            entries = self.registry.load()
+            if entries:
+                self.select_project(entries[-1])
 
-        self.app.push_screen(ImportProjectScreen(self.registry), _on_dismiss)
+    def import_project(self) -> None:
+        self.app.push_screen(ImportProjectScreen(self.registry), self._on_project_registered)
+
+    def clone_project(self) -> None:
+        self.app.push_screen(CloneProjectScreen(self.registry), self._on_project_registered)
 
     def create_project(self) -> None:
         def _on_dismiss(created: bool | None) -> None:

@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,84 @@ async def test_import_project_populates_all_panels(project_root, tmp_path):
 
         bom_names = {dep.artifact_id for dep in screen.project.managed_dependencies}
         assert "commons-lang3" in bom_names
+
+
+async def test_clone_project_populates_all_panels(project_root, tmp_path):
+    # git trata um path local como URL valida - nao precisa de rede/servico
+    # remoto de verdade para exercitar o fluxo completo.
+    subprocess.run(
+        ["git", "init"], cwd=project_root, check=True, capture_output=True, text=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=project_root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "initial"],
+        cwd=project_root,
+        check=True,
+        capture_output=True,
+    )
+
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+    destination = tmp_path / "cloned-project"
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("g")
+        await pilot.pause()
+
+        clone_screen = app.screen
+        assert type(clone_screen).__name__ == "CloneProjectScreen"
+        clone_screen.query_one("#url-input", Input).value = str(project_root)
+        clone_screen.query_one("#dest-input", Input).value = str(destination)
+        await pilot.click("#confirm-clone")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert (destination / ".git").is_dir()
+        assert screen.project is not None
+        assert screen.project.name == "Multi Module Demo"
+        assert screen.project.root_path == destination
+
+
+async def test_clone_project_rejects_non_empty_destination(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+    destination = tmp_path / "already-there"
+    destination.mkdir()
+    (destination / "existing.txt").write_text("x")
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("g")
+        await pilot.pause()
+
+        clone_screen = app.screen
+        clone_screen.query_one("#url-input", Input).value = str(project_root)
+        clone_screen.query_one("#dest-input", Input).value = str(destination)
+        await pilot.click("#confirm-clone")
+        await pilot.pause()
+
+        assert type(app.screen).__name__ == "CloneProjectScreen"
+        assert screen.project is None
+        assert (destination / "existing.txt").is_file()
 
 
 async def test_create_project_via_manifest_form_materializes_and_selects(tmp_path):
