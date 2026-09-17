@@ -319,9 +319,18 @@ class GradleAdapter(BuildToolAdapter):
     def remove_direct_dependency(
         self, project: Project, module_name: str, group_id: str, artifact_id: str
     ) -> Project:
-        raise NotImplementedError(
-            _STUB_MESSAGE.format(method="remove_direct_dependency")
-        )
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        build_path = project.root_path / target.build_file.path
+        if not self._writer.remove_dependency(build_path, group_id, artifact_id):
+            raise ValueError(
+                f"Dependencia direta '{group_id}:{artifact_id}' nao encontrada em "
+                f"'{target.name}'"
+            )
+
+        return self.infer_structure(project.root_path)
 
     def register_directory_role(
         self,

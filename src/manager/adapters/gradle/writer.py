@@ -376,6 +376,46 @@ class GradleWriter:
         path.write_text(new_text)
         return True
 
+    def remove_dependency(self, path: Path, group_id: str, artifact_id: str) -> bool:
+        """Remove a entrada DIRETA (group_id, artifact_id), na porcao de
+        `dependencies{}` fora de `constraints{}` (nunca confunde com uma
+        entrada gerenciada de mesmas coordenadas - ver `exclude_span`).
+        Colapsa `dependencies{}` inteiro se ficar vazio. Retorna False
+        (sem alterar nada) se `dependencies{}` nao existir ou a entrada
+        nao for encontrada.
+        """
+        text = path.read_text()
+
+        deps_span = find_block(text, "dependencies")
+        if deps_span is None:
+            return False
+        d_start, d_end, d_inner = deps_span
+        d_content_end = d_end - 1
+        d_content_start = d_content_end - len(d_inner)
+        d_header = text[d_start:d_content_start]
+        d_closing = text[d_content_end:d_end]
+
+        constraints_span = find_block(d_inner, "constraints")
+        exclude = (
+            (constraints_span[0], constraints_span[1]) if constraints_span else None
+        )
+
+        new_d_inner, removed = self._remove_dep_line(
+            d_inner, group_id, artifact_id, exclude_span=exclude
+        )
+        if not removed:
+            return False
+
+        if new_d_inner.strip():
+            new_text = (
+                text[:d_start] + d_header + new_d_inner + d_closing + text[d_end:]
+            )
+        else:
+            new_text = self._remove_span_and_collapse_blank_lines(text, d_start, d_end)
+
+        path.write_text(new_text)
+        return True
+
     # ---- update_metadata orchestration ----
 
     def update_metadata(
