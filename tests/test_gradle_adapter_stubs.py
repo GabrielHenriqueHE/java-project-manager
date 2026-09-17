@@ -18,11 +18,6 @@ def test_create_project_is_a_stub(project):
         GradleAdapter().create_project(None, Path("/tmp/x"))
 
 
-def test_remove_module_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().remove_module(project, "core")
-
-
 def test_register_directory_role_is_a_stub(project):
     with pytest.raises(NotImplementedError):
         GradleAdapter().register_directory_role(

@@ -24,10 +24,13 @@ _SCOPE_TO_CONFIG: dict[str | None, str] = {
 
 _FULL_DEP_LINE_RE = re.compile(
     r"^[ \t]*(?P<config>" + "|".join(CONFIG_NAMES) + r")"
-    r"\s*\(?\s*"
-    r"(?P<platform>platform\s*\(\s*)?"
+    r"[ \t]*\(?[ \t]*"
+    r"(?P<platform>platform[ \t]*\([ \t]*)?"
     r"['\"](?P<coord>[^'\"]+)['\"]"
-    r"\s*\)?\s*\)?[ \t]*\n?",
+    # so espacos/parenteses de fechamento na MESMA linha - um `\s*` aqui
+    # (que tambem casa `\n`) vazaria para a linha seguinte e engoliria a
+    # proxima dependencia inteira quando ha mais de uma no bloco.
+    r"[ \t]*\)?[ \t]*\)?[ \t]*\n?",
     re.MULTILINE,
 )
 
@@ -475,6 +478,36 @@ class GradleWriter:
             text = text[:insertion_point] + f", {entry}" + text[insertion_point:]
 
         path.write_text(text)
+
+    def remove_include(self, path: Path, artifact_id: str) -> bool:
+        """Remove `artifact_id` de dentro de `include(...)` (o inverso de
+        `add_include`). Remove a declaracao `include(...)` inteira se
+        `artifact_id` for a unica entrada. Retorna False (sem alterar
+        nada) se nao achar `artifact_id` em nenhuma declaracao
+        `include(...)` do arquivo.
+        """
+        text = path.read_text()
+        dialect = self.dialect(path)
+        quote = '"' if dialect == "kotlin" else "'"
+
+        for match in INCLUDE_RE.finditer(text):
+            entries = QUOTED_RE.findall(match.group(1))
+            if artifact_id not in entries:
+                continue
+
+            remaining = [entry for entry in entries if entry != artifact_id]
+            if remaining:
+                new_list = ", ".join(f"{quote}{entry}{quote}" for entry in remaining)
+                new_text = text[: match.start(1)] + new_list + text[match.end(1) :]
+            else:
+                new_text = self._remove_span_and_collapse_blank_lines(
+                    text, match.start(), match.end()
+                )
+
+            path.write_text(new_text)
+            return True
+
+        return False
 
     # ---- criacao de build.gradle(.kts) do zero ----
 

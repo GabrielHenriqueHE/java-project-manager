@@ -1,10 +1,17 @@
 import shutil
 from pathlib import Path
 
-from manager.adapters.base import BuildToolAdapter, DirectoryNotEmptyConflict
+from manager.adapters.base import (
+    BuildToolAdapter,
+    DependentModuleConflict,
+    DirectoryNotEmptyConflict,
+)
 from manager.adapters.common.lookup import (
+    find_bom_module,
+    find_dependents,
     find_managed_dependency_owner,
     find_module,
+    find_parent,
     resolve_module_relative_path,
 )
 from manager.adapters.gradle.directory import detect_directory_structure
@@ -228,7 +235,38 @@ class GradleAdapter(BuildToolAdapter):
     def remove_module(
         self, project: Project, module_name: str, *, force: bool = False
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="remove_module"))
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        parent = find_parent(project.root_module, target)
+        if parent is None:
+            raise ValueError("Nao e possivel remover o modulo raiz do projeto")
+
+        dependents = find_dependents(project.root_module, target)
+        if dependents and not force:
+            raise DependentModuleConflict(
+                module_name, dependents=[m.name for m in dependents]
+            )
+
+        root_path = project.root_path
+        group_id = target.metadata.group_id
+        artifact_id = target.metadata.artifact_id
+
+        settings_path = find_settings_file(root_path)
+        if settings_path is not None:
+            self._writer.remove_include(settings_path, artifact_id)
+
+        bom_module = find_bom_module(project.root_module)
+        if bom_module is not None and bom_module.relative_path != target.relative_path:
+            bom_path = root_path / bom_module.build_file.path
+            self._writer.remove_managed_dependency(bom_path, group_id, artifact_id)
+
+        for dependent in dependents:
+            dependent_path = root_path / dependent.build_file.path
+            self._writer.remove_dependency(dependent_path, group_id, artifact_id)
+
+        return self.infer_structure(root_path)
 
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency
