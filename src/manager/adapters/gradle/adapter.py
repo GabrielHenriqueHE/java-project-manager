@@ -25,7 +25,7 @@ from manager.adapters.gradle.parser import (
     parse_settings_file,
 )
 from manager.adapters.gradle.writer import GradleWriter
-from manager.manifest import ModuleManifest
+from manager.manifest import ModuleManifest, is_bom_manifest, validate_manifest_tree
 from manager.models import (
     BuildFile,
     Dependency,
@@ -41,14 +41,17 @@ _STUB_MESSAGE = "{method} ainda nao implementado para Gradle - fase futura"
 class GradleAdapter(BuildToolAdapter):
     """Suporte a projetos Gradle (Groovy e Kotlin DSL).
 
-    Fase 15 (fundacao): `detect`/`infer_structure`. Fase 16: primeira
-    mutacao real, `add_directory`/`remove_directory` - nao exigem editar
-    build.gradle(.kts) (diretorios-padrao nao precisam ser declarados no
-    Gradle, ao contrario do Maven), entao sao puramente filesystem +
-    `infer_structure`, mesmo comportamento do MavenAdapter. As demais
-    mutacoes (criar projeto, adicionar/remover modulo, dependencias,
-    registro de diretorio customizado) seguem como stubs
-    `NotImplementedError` - fatias futuras.
+    Fase 15 (fundacao): `detect`/`infer_structure`. Fases 16-23: as 9
+    mutacoes que fazem sentido no modelo Gradle desta feature -
+    diretorios, metadados, dependencias (upsert/remocao gerenciada e
+    direta), modulos (adicionar/remover) e `create_project` - todas
+    implementadas de ponta a ponta, reaproveitando `GradleWriter` para
+    a edicao textual de `build.gradle(.kts)`/`settings.gradle(.kts)`.
+    `register_directory_role`/`unregister_directory_role` continuam
+    stub `NotImplementedError` - o mecanismo equivalente no Gradle
+    (`sourceSets{}`) esta permanentemente fora de escopo desta feature
+    (ver `specs/features/06-suporte-gradle/requirements.md`), nao e uma
+    fatia pendente.
     """
 
     build_tool = "gradle"
@@ -166,7 +169,7 @@ class GradleAdapter(BuildToolAdapter):
             is_bom=packaging == "pom" and bool(parsed.managed_dependencies),
         )
 
-    # ---- mutacoes: stubs (fase futura) ----
+    # ---- mutacoes ----
 
     def create_project(
         self,
@@ -175,7 +178,117 @@ class GradleAdapter(BuildToolAdapter):
         *,
         source_root: Path | None = None,
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="create_project"))
+        validate_manifest_tree(manifest)
+        self._validate_gradle_manifest(manifest)
+
+        destination_path = destination_path.resolve()
+        if destination_path.exists() and any(destination_path.iterdir()):
+            raise ValueError(f"'{destination_path}' ja existe e nao esta vazio")
+        destination_path.mkdir(parents=True, exist_ok=True)
+
+        # O manifesto e agnostico de build tool (Fase 6) e nao carrega
+        # nenhuma informacao de dialeto Gradle - create_project sempre
+        # materializa em Groovy (build.gradle/settings.gradle). Decisao
+        # deliberada e conservadora: adicionar um campo de dialeto ao
+        # manifesto reabriria uma decisao de arquitetura da Fase 6, o
+        # que nao foi pedido.
+        root_artifact_id = manifest.metadata.artifact_id
+        submodule_names = [sub.metadata.artifact_id for sub in manifest.submodules]
+
+        settings_lines = [f"rootProject.name = '{root_artifact_id}'"]
+        if submodule_names:
+            includes = ", ".join(f"'{name}'" for name in submodule_names)
+            settings_lines.append(f"include {includes}")
+        (destination_path / "settings.gradle").write_text(
+            "\n".join(settings_lines) + "\n"
+        )
+
+        self._writer.create_build_file(
+            destination_path / "build.gradle",
+            packaging=manifest.metadata.packaging,
+            group_id=manifest.metadata.group_id,
+            version=manifest.metadata.version,
+            dependencies=manifest.dependencies,
+        )
+        self._materialize_directories(
+            destination_path,
+            manifest.directory_structure,
+            source_root,
+            root_artifact_id,
+        )
+
+        for sub in manifest.submodules:
+            module_dir = destination_path / sub.metadata.artifact_id
+            self._writer.create_build_file(
+                module_dir / "build.gradle",
+                packaging=sub.metadata.packaging,
+                group_id=sub.metadata.group_id,
+                version=sub.metadata.version,
+                dependencies=sub.dependencies,
+            )
+            self._materialize_directories(
+                module_dir,
+                sub.directory_structure,
+                source_root,
+                sub.metadata.artifact_id,
+            )
+
+        return self.infer_structure(destination_path)
+
+    def _validate_gradle_manifest(self, module: ModuleManifest) -> None:
+        """Mesmas validacoes estruturais do Maven (`_validate_maven_manifest`),
+        MENOS a exigencia de groupId/version no modulo raiz: essa regra
+        existe no Maven porque o pom raiz nao tem <parent> de quem
+        herdar; o Gradle nunca leu heranca nenhuma (nem de
+        allprojects{}), entao group/version ausentes na raiz sao apenas
+        omitidos do build.gradle, sem erro.
+        """
+        is_bom = is_bom_manifest(module)
+        if (module.submodules or is_bom) and module.metadata.packaging != "pom":
+            raise ValueError(
+                f"Modulo '{module.metadata.artifact_id}' tem submodulos ou e BOM; "
+                "packaging precisa ser 'pom'"
+            )
+
+        for dep in module.dependencies:
+            if dep.managed and not dep.version:
+                raise ValueError(
+                    f"Dependencia gerenciada '{dep.group_id}:{dep.artifact_id}' "
+                    "precisa de version"
+                )
+
+        for sub in module.submodules:
+            self._validate_gradle_manifest(sub)
+
+    def _materialize_directories(
+        self,
+        module_dir: Path,
+        structure,
+        source_root: Path | None,
+        artifact_id: str,
+    ) -> None:
+        """Cria (ou copia de `source_root`, se houver) os diretorios de
+        `structure`. Ao contrario do Maven, nunca "registra" um
+        diretorio nao-convencional no build - o equivalente Gradle
+        (`sourceSets{}`) esta fora de escopo desta feature
+        (`register_directory_role`/`unregister_directory_role`
+        continuam stub); o diretorio e criado/copiado normalmente, so
+        nao aparece com o sufixo `(build)` no Painel [5].
+        """
+        module_snapshot = (source_root / artifact_id) if source_root else None
+        all_dirs = {
+            *structure.source_dirs,
+            *structure.test_dirs,
+            *structure.resource_dirs,
+            *structure.test_resource_dirs,
+        }
+        for rel_dir in all_dirs:
+            target = module_dir / rel_dir
+            snapshot = (module_snapshot / rel_dir) if module_snapshot else None
+            if snapshot is not None and snapshot.is_dir():
+                shutil.copytree(snapshot, target, dirs_exist_ok=True)
+            else:
+                target.mkdir(parents=True, exist_ok=True)
 
     def add_module(
         self, project: Project, module: Module, *, parent_name: str | None = None
@@ -419,6 +532,8 @@ class GradleAdapter(BuildToolAdapter):
             )
 
         return self.infer_structure(project.root_path)
+
+    # ---- fora de escopo: sourceSets{} nao implementado ----
 
     def register_directory_role(
         self,

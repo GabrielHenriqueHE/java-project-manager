@@ -13,11 +13,6 @@ def project():
     return GradleAdapter().infer_structure(GROOVY)
 
 
-def test_create_project_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().create_project(None, Path("/tmp/x"))
-
-
 def test_register_directory_role_is_a_stub(project):
     with pytest.raises(NotImplementedError):
         GradleAdapter().register_directory_role(
