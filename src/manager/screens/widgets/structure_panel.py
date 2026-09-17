@@ -19,6 +19,13 @@ _CHECKLIST_DIRS = [
     "docs",
 ]
 
+_STANDARD_BY_LIST = {
+    "source_dirs": "src/main/java",
+    "resource_dirs": "src/main/resources",
+    "test_dirs": "src/test/java",
+    "test_resource_dirs": "src/test/resources",
+}
+
 
 def _flatten_modules(module: Module) -> list[Module]:
     result = [module]
@@ -63,20 +70,17 @@ def _build_module_node(module: Module, root_path: Path, is_root: bool) -> _TreeN
         )
 
     dirs = module.directory_structure
-    for rel in [
-        *dirs.source_dirs,
-        *dirs.resource_dirs,
-        *dirs.test_dirs,
-        *dirs.test_resource_dirs,
-    ]:
-        abs_dir = module_dir / rel
-        if not abs_dir.is_dir():
-            continue
-        dir_node = _TreeNode(f"{rel}/")
-        collapsed = _collapse_single_child_dirs(abs_dir)
-        if collapsed:
-            dir_node.children.append(_TreeNode(collapsed))
-        node.children.append(dir_node)
+    for list_name, standard in _STANDARD_BY_LIST.items():
+        for rel in getattr(dirs, list_name):
+            abs_dir = module_dir / rel
+            if not abs_dir.is_dir():
+                continue
+            suffix = "" if rel == standard else "  [dim](build)[/]"
+            dir_node = _TreeNode(f"{rel}/{suffix}")
+            collapsed = _collapse_single_child_dirs(abs_dir)
+            if collapsed:
+                dir_node.children.append(_TreeNode(collapsed))
+            node.children.append(dir_node)
 
     for sub in module.submodules:
         node.children.append(_build_module_node(sub, root_path, is_root=False))
