@@ -266,6 +266,180 @@ async def test_cancel_create_project_creates_nothing(tmp_path):
         assert screen.project is None
 
 
+async def test_init_project_via_form_creates_maven_project_and_selects(tmp_path):
+    destination = tmp_path / "novo-maven"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "maven"
+        init_screen.query_one("#field-group-id", Input).value = "com.example"
+        init_screen.query_one("#field-artifact-id", Input).value = "novo-maven"
+        init_screen.query_one("#field-version", Input).value = "1.0.0"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is not None
+        assert screen.project.name == "novo-maven"
+        assert (destination / "pom.xml").is_file()
+
+
+async def test_init_project_via_form_creates_gradle_project_and_selects(tmp_path):
+    destination = tmp_path / "novo-gradle"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "gradle"
+        init_screen.query_one("#field-artifact-id", Input).value = "novo-gradle"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause(0.8)
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is not None
+        assert screen.project.name == "novo-gradle"
+        assert (destination / "build.gradle").is_file()
+        assert (destination / "settings.gradle").is_file()
+
+
+async def test_init_project_missing_artifact_id_keeps_form_open(tmp_path):
+    destination = tmp_path / "sem-artifact"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "maven"
+        init_screen.query_one("#field-group-id", Input).value = "com.example"
+        init_screen.query_one("#field-version", Input).value = "1.0.0"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause()
+
+        assert app.screen is init_screen
+        assert "artifactId" in str(init_screen.query_one("#init-feedback").content)
+        assert not destination.exists()
+
+
+async def test_init_project_maven_without_group_or_version_shows_adapter_error(
+    tmp_path,
+):
+    destination = tmp_path / "sem-group"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "maven"
+        init_screen.query_one("#field-artifact-id", Input).value = "sem-group"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause()
+
+        assert app.screen is init_screen
+        assert "groupId" in str(init_screen.query_one("#init-feedback").content)
+        assert not destination.exists()
+
+
+async def test_init_project_destination_already_exists_and_not_empty_fails(tmp_path):
+    destination = tmp_path / "ja-existe"
+    destination.mkdir()
+    (destination / "existing.txt").write_text("x")
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "maven"
+        init_screen.query_one("#field-group-id", Input).value = "com.example"
+        init_screen.query_one("#field-artifact-id", Input).value = "ja-existe"
+        init_screen.query_one("#field-version", Input).value = "1.0.0"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause()
+
+        assert app.screen is init_screen
+        feedback = str(init_screen.query_one("#init-feedback").content)
+        assert "ja existe" in feedback
+        assert not (destination / "pom.xml").exists()
+
+
+async def test_init_project_invalid_build_tool_keeps_form_open(tmp_path):
+    destination = tmp_path / "build-tool-invalida"
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        init_screen = app.screen
+        init_screen.query_one("#field-build-tool", Input).value = "ant"
+        init_screen.query_one("#field-artifact-id", Input).value = "demo"
+        init_screen.query_one("#field-destination", Input).value = str(destination)
+        await pilot.click("#confirm-init")
+        await pilot.pause()
+
+        assert app.screen is init_screen
+        feedback = str(init_screen.query_one("#init-feedback").content)
+        assert "maven" in feedback and "gradle" in feedback
+        assert not destination.exists()
+
+
+async def test_cancel_init_project_creates_nothing(tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("i")
+        await pilot.pause()
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is None
+
+
 async def test_export_project_writes_manifest_yaml(project_root, tmp_path):
     registry = ProjectRegistry(tmp_path / "registry.json")
     registry.add(project_root, "maven")

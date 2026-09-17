@@ -15,10 +15,11 @@ Dar ao usuário um ponto de entrada único (dashboard) para ver, abrir, registra
 - Registrar um projeto existente no disco (aponta para um path, a ferramenta detecta a build tool e infere a estrutura — ver [[05-inferencia-de-projeto-existente]]).
 - Remover um projeto da lista de registrados (não apaga nada do disco — apenas "esquece" o projeto).
 - Abrir um projeto registrado para ver seus detalhes.
+- Criar um projeto Java do zero, tanto a partir de um manifesto YAML completo (multi-módulo, com BOM — Fase 6) quanto por um formulário simples de um único módulo direto na TUI, sem manifesto (Fase 24).
+- Clonar/baixar um projeto de um repositório remoto (Fase 13).
 
 **Fora (fases futuras):**
-- Criar um projeto Java do zero (scaffold completo de um novo projeto multi-módulo) — depende de [[04-estrutura-de-diretorios]] e da capacidade de escrita do adapter, que na Fase 1 é só leitura.
-- Clonar/baixar projetos de um repositório remoto.
+- Formulário visual para montar um manifesto multi-módulo completo (árvore de submódulos, BOM, dependências) — o formulário da Fase 24 cobre só um módulo único; para multi-módulo o caminho continua sendo escrever o manifesto YAML à mão (Fase 6).
 
 ## User stories
 
@@ -32,6 +33,7 @@ Dar ao usuário um ponto de entrada único (dashboard) para ver, abrir, registra
 - Dado um path válido de projeto Maven, quando peço para registrar, então a build tool é detectada automaticamente e o projeto aparece na lista sem exigir input adicional de metadados.
 - Dado um path inválido (não é projeto Java reconhecível), quando peço para registrar, então recebo uma mensagem de erro clara e nada é adicionado à lista.
 - Dado um projeto registrado, quando peço para remover, então ele desaparece da lista e nenhum arquivo do projeto real é alterado.
+- Dado um build tool, groupId (quando aplicável), artifactId, version (quando aplicável) e um destino vazio, quando peço para iniciar um projeto pelo formulário, então um projeto de módulo único é materializado em disco e passa a aparecer na lista, sem exigir nenhum arquivo de manifesto.
 
 ## Requisitos não funcionais
 

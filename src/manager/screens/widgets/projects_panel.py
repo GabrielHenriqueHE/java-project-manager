@@ -14,6 +14,7 @@ class ProjectsPanel(Panel):
 
     BINDINGS = [
         ("n", "import_project", "novo"),
+        ("i", "init_project", "iniciar"),
         ("c", "create_project", "criar"),
         ("g", "clone_project", "clonar"),
         ("e", "export_project", "exportar"),
@@ -79,6 +80,9 @@ class ProjectsPanel(Panel):
 
     def action_import_project(self) -> None:
         self.screen.import_project()
+
+    def action_init_project(self) -> None:
+        self.screen.init_project()
 
     def action_create_project(self) -> None:
         self.screen.create_project()

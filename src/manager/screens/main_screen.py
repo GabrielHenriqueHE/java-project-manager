@@ -16,6 +16,7 @@ from manager.screens.clone_project import CloneProjectScreen
 from manager.screens.create_project import CreateProjectScreen
 from manager.screens.export_manifest import ExportManifestScreen
 from manager.screens.import_project import ImportProjectScreen
+from manager.screens.init_project import InitProjectScreen
 from manager.screens.widgets.app_header import AppHeader
 from manager.screens.widgets.bom_panel import BomPanel
 from manager.screens.widgets.build_source_form import BuildSourceFormScreen
@@ -153,6 +154,9 @@ class MainScreen(Screen):
 
     def clone_project(self) -> None:
         self.app.push_screen(CloneProjectScreen(self.registry), self._on_project_registered)
+
+    def init_project(self) -> None:
+        self.app.push_screen(InitProjectScreen(self.registry), self._on_project_registered)
 
     def create_project(self) -> None:
         def _on_dismiss(created: bool | None) -> None:

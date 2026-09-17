@@ -24,7 +24,7 @@ Ou, em modo de desenvolvimento (com console de debug do Textual):
 uv run textual run --dev src/manager/app.py
 ```
 
-A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `x` remove um diretório por caminho livre (Estrutura), `b` registra o diretório ativo no build (Estrutura), `u` desregistra (Estrutura), `m` adiciona dependência direta do módulo selecionado (BOM+Dependências), `r` remove uma dependência direta (BOM+Dependências), `g` clona um repositório remoto (Projetos), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
+A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `i` inicia um projeto novo do zero sem manifesto (Projetos), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `x` remove um diretório por caminho livre (Estrutura), `b` registra o diretório ativo no build (Estrutura), `u` desregistra (Estrutura), `m` adiciona dependência direta do módulo selecionado (BOM+Dependências), `r` remove uma dependência direta (BOM+Dependências), `g` clona um repositório remoto (Projetos), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
 
 ## Rodando os testes
 
@@ -57,5 +57,6 @@ uv run pytest
 - **Fase 21 — Gradle: Adicionar Módulo** (concluída): `add_module` cria um `build.gradle(.kts)` novo e registra em `include(...)` no `settings.gradle(.kts)`. Só filhos diretos da raiz (árvore Gradle é achatada por design).
 - **Fase 22 — Gradle: Remover Módulo** (concluída): `remove_module`, espelhando o Maven (conflito de dependentes, BOM, dependentes diretos).
 - **Fase 23 — Gradle: Criar Projeto** (concluída, fecha as mutações Gradle em escopo): `create_project` materializa um projeto Gradle inteiro a partir de um `ModuleManifest` (sempre Groovy). Únicas mutações Gradle que continuam fora de escopo: `register_directory_role`/`unregister_directory_role` (`sourceSets{}`), permanentemente — não são fatias pendentes.
+- **Fase 24 — Iniciar Projeto do Zero** (concluída): novo `InitProjectScreen` monta um `ModuleManifest` em memória (sem YAML) a partir de um formulário simples (build tool, groupId, artifactId, version, destino) e chama o `create_project` já existente (Maven ou Gradle). Painel [1], binding `i`. Escopo restrito a um único módulo raiz — multi-módulo/BOM continua exclusivo do fluxo de manifesto (`c`).
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.
