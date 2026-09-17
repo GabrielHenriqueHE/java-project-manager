@@ -125,7 +125,7 @@ class MainScreen(Screen):
     def _refresh_all_panels(self) -> None:
         self.query_one(ModulesPanel).refresh_modules(self.project, self.selected_module)
         self.query_one(MetadataPanel).refresh_module(self.selected_module)
-        self.query_one(BomPanel).refresh_bom(self.project)
+        self.query_one(BomPanel).refresh_bom(self.project, self.selected_module)
         self.query_one(StructurePanel).refresh_structure(self.project)
         self.query_one(AppHeader).set_project(self.project)
 
@@ -198,6 +198,7 @@ class MainScreen(Screen):
     def select_module(self, module: Module) -> None:
         self.selected_module = module
         self.query_one(MetadataPanel).refresh_module(module)
+        self.query_one(BomPanel).refresh_bom(self.project, module)
 
     def add_module(self, parent: Module | None) -> None:
         if self.project is None or self._adapter is None:
@@ -276,7 +277,24 @@ class MainScreen(Screen):
             self.notify("Nenhum projeto selecionado", severity="error")
             return
         target_module = self.selected_module or self.project.root_module
+        self._open_dependency_form(
+            target_module, managed=True, title="Nova dependencia gerenciada (BOM)"
+        )
 
+    def add_direct_dependency(self) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        target_module = self.selected_module or self.project.root_module
+        self._open_dependency_form(
+            target_module,
+            managed=False,
+            title=f"Nova dependencia direta de {target_module.name}",
+        )
+
+    def _open_dependency_form(
+        self, target_module: Module, *, managed: bool, title: str
+    ) -> None:
         def _on_submit(dependency: Dependency | None) -> None:
             if dependency is None:
                 return
@@ -290,7 +308,9 @@ class MainScreen(Screen):
             self.notify(f"Dependencia '{dependency.artifact_id}' registrada")
             self.set_project(updated)
 
-        self.app.push_screen(DependencyFormScreen(), _on_submit)
+        self.app.push_screen(
+            DependencyFormScreen(title=title, managed=managed), _on_submit
+        )
 
     def remove_dependency(self, dependency: Dependency) -> None:
         if self.project is None or self._adapter is None:

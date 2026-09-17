@@ -8,12 +8,25 @@ from manager.models import Dependency
 
 
 class DependencyFormScreen(ModalScreen[Dependency | None]):
-    """Formulario para declarar uma dependencia gerenciada (BOM).
+    """Formulario para declarar uma dependencia gerenciada (BOM) ou uma
+    dependencia direta de um modulo - o par de operacoes usa o mesmo
+    formulario, so title/managed mudam (ver phase-12-dependencia-direta).
 
-    Usado apenas pelo Painel [4] BOM + DEPENDENCIAS - a dependencia
-    resultante e sempre `managed=True` (ver specs/phases/phase-2-update-dependency:
-    editar dependencias diretas de um modulo qualquer fica fora desta fatia).
+    version e obrigatoria apenas para `managed=True`: uma dependencia
+    direta pode depender de uma version vinda do dependencyManagement,
+    entao fica opcional - mesma regra ja aplicada por
+    MavenAdapter.update_dependency.
     """
+
+    def __init__(
+        self,
+        *,
+        title: str = "Nova dependencia gerenciada (BOM)",
+        managed: bool = True,
+    ) -> None:
+        super().__init__()
+        self._title = title
+        self._managed = managed
 
     DEFAULT_CSS = """
     DependencyFormScreen {
@@ -38,17 +51,28 @@ class DependencyFormScreen(ModalScreen[Dependency | None]):
     """
 
     def compose(self) -> ComposeResult:
+        version_label = "version *" if self._managed else "version (opcional)"
+        type_hint = (
+            "type (ex.: pom, para importar outro BOM)"
+            if self._managed
+            else "type (ex.: pom, jar, ...)"
+        )
+        scope_hint = (
+            "scope (ex.: import)"
+            if self._managed
+            else "scope (ex.: compile, provided, runtime, test)"
+        )
         yield Vertical(
-            Static("Nova dependencia gerenciada (BOM)"),
+            Static(self._title),
             Label("groupId *"),
             Input(id="field-group-id"),
             Label("artifactId *"),
             Input(id="field-artifact-id"),
-            Label("version *"),
+            Label(version_label),
             Input(id="field-version"),
-            Label("type (ex.: pom, para importar outro BOM)"),
+            Label(type_hint),
             Input(id="field-type"),
-            Label("scope (ex.: import)"),
+            Label(scope_hint),
             Input(id="field-scope"),
             Static(id="form-feedback"),
             Button("Salvar", id="form-confirm", variant="primary"),
@@ -63,10 +87,13 @@ class DependencyFormScreen(ModalScreen[Dependency | None]):
     def _confirm(self) -> None:
         group_id = self.query_one("#field-group-id", Input).value.strip()
         artifact_id = self.query_one("#field-artifact-id", Input).value.strip()
-        version = self.query_one("#field-version", Input).value.strip()
+        version = self.query_one("#field-version", Input).value.strip() or None
         feedback = self.query_one("#form-feedback", Static)
 
-        if not group_id or not artifact_id or not version:
+        if not group_id or not artifact_id:
+            feedback.update("[red]Informe groupId e artifactId.[/red]")
+            return
+        if self._managed and not version:
             feedback.update("[red]Informe groupId, artifactId e version.[/red]")
             return
 
@@ -79,6 +106,6 @@ class DependencyFormScreen(ModalScreen[Dependency | None]):
             version=version,
             type=type_,
             scope=scope,
-            managed=True,
+            managed=self._managed,
         )
         self.dismiss(dependency)

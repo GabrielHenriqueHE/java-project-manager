@@ -14,4 +14,6 @@ Todas as mutações previstas para a Fase 2 (`add_module`, `remove_module`, `upd
 
 **`remove_dependency` implementado** na Fase 5 (`specs/phases/phase-5-remover-dependencia/`): novo método na interface `BuildToolAdapter`, remove uma dependência gerenciada (BOM) identificada por `groupId:artifactId` em qualquer módulo que a declare, reaproveitando o `MavenPomWriter.remove_managed_dependency` já existente desde a Fase 2. TUI: Painel [4], binding `d`.
 
-Ainda fora de escopo: adicionar/editar dependência **direta** (`managed=False`) de um módulo qualquer pela TUI — sem painel para isso no layout atual.
+**Dependência direta na TUI implementada** na Fase 12 (`specs/phases/phase-12-dependencia-direta/`): sem mudança no `MavenAdapter` (`update_dependency` já suportava `managed=False` desde a Fase 2) — só na TUI. `DependencyFormScreen` ganhou `title`/`managed` parametrizáveis; Painel [4] BOM + DEPENDÊNCIAS ganhou uma segunda seção somente-leitura com as dependências diretas do módulo selecionado no Painel [3], e um novo binding `m` abre o formulário já com `managed=False` para o módulo ativo (qualquer `packaging`, não só `pom`).
+
+Ainda fora de escopo: remover uma dependência direta pela TUI (o `MavenPomWriter.remove_dependency` já existe, usado internamente por `remove_module`, mas não está exposto como operação de usuário); navegar/selecionar item por item na lista de diretas.

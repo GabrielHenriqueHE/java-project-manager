@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from textual.app import App
-from textual.widgets import Input, ListView
+from textual.widgets import Input, ListView, Static
 
 from manager.screens.main_screen import MainScreen
 from manager.screens.widgets.bom_panel import BomPanel
@@ -1118,6 +1118,85 @@ async def test_add_managed_dependency_via_bom_panel(project_root, tmp_path):
         assert isinstance(app.screen, MainScreen)
         names = {dep.artifact_id for dep in screen.project.managed_dependencies}
         assert "commons-io" in names
+
+
+async def test_add_direct_dependency_to_selected_module_via_bom_panel(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+        lv = screen.query_one("#modules-list", ListView)
+        lv.index = 2  # root(0) -> bom(1) -> core(2); "core" tem packaging=jar,
+        # nao aceita dependencia gerenciada, mas aceita direta.
+        await pilot.pause()
+        assert screen.selected_module.name == "core"
+
+        await pilot.press("4")
+        await pilot.press("m")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "DependencyFormScreen"
+        form.query_one("#field-group-id", Input).value = "org.apache.commons"
+        form.query_one("#field-artifact-id", Input).value = "commons-io"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        core = next(
+            m for m in screen.project.root_module.submodules if m.name == "core"
+        )
+        direct = [d for d in core.dependencies if not d.managed]
+        assert any(d.artifact_id == "commons-io" for d in direct)
+        # nao vaza para a lista de gerenciadas (BOM) do projeto.
+        assert "commons-io" not in {
+            dep.artifact_id for dep in screen.project.managed_dependencies
+        }
+
+        # set_project() reseleciona a raiz apos qualquer mutacao (comportamento
+        # existente em todo o app, nao especifico desta fatia) - reseleciona
+        # "core" para conferir que o Painel [4] mostra a dependencia direta.
+        lv.index = 2
+        await pilot.pause()
+        bom_panel = screen.query_one(BomPanel)
+        direct_list = bom_panel.query_one("#direct-deps-list", Static)
+        assert "commons-io" in str(direct_list.render())
+
+
+async def test_bom_panel_direct_dependencies_follow_module_selection(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+        lv = screen.query_one("#modules-list", ListView)
+        bom_panel = screen.query_one(BomPanel)
+
+        lv.index = 0  # root
+        await pilot.pause()
+        header = bom_panel.query_one("#direct-deps-header", Static)
+        assert screen.selected_module.name in str(header.render())
 
 
 async def test_add_dependency_cancel_does_not_change_anything(project_root, tmp_path):

@@ -22,6 +22,7 @@ class BomPanel(Panel):
 
     BINDINGS = [
         ("n", "add_dependency", "novo"),
+        ("m", "add_direct_dependency", "dep. direta"),
         ("j", "cursor_down", "mover"),
         ("k", "cursor_up", "mover"),
         ("d", "remove_dependency", "remover"),
@@ -36,11 +37,15 @@ class BomPanel(Panel):
             "nada declarado. pressione n", id="bom-empty", classes="panel-empty-state"
         )
         yield ListView(id="bom-list")
+        yield Static(id="direct-deps-header")
+        yield Static(id="direct-deps-list")
 
     def on_mount(self) -> None:
         self.refresh_bom(None)
 
-    def refresh_bom(self, project: Project | None) -> None:
+    def refresh_bom(
+        self, project: Project | None, selected_module: Module | None = None
+    ) -> None:
         list_view = self.query_one("#bom-list", ListView)
         empty = self.query_one("#bom-empty", Static)
         list_view.clear()
@@ -51,6 +56,7 @@ class BomPanel(Panel):
             empty.update("nenhum projeto selecionado")
             empty.display = True
             list_view.display = False
+            self._render_direct_dependencies(None)
             return
 
         bom_module = find_bom_module(project.root_module)
@@ -61,21 +67,46 @@ class BomPanel(Panel):
             empty.update("nada declarado. pressione n")
             empty.display = True
             list_view.display = False
-            return
-
-        empty.display = False
-        list_view.display = True
-        self._dependencies = dependencies
-        for dep in dependencies:
-            scope = dep.scope or "import"
-            list_view.append(
-                ListItem(
-                    Label(
-                        f"bom {dep.group_id}:[bold]{dep.artifact_id}[/] {dep.version} · [dim]{scope}[/]"
+        else:
+            empty.display = False
+            list_view.display = True
+            self._dependencies = dependencies
+            for dep in dependencies:
+                scope = dep.scope or "import"
+                list_view.append(
+                    ListItem(
+                        Label(
+                            f"bom {dep.group_id}:[bold]{dep.artifact_id}[/] {dep.version} · [dim]{scope}[/]"
+                        )
                     )
                 )
+            list_view.index = 0
+
+        self._render_direct_dependencies(selected_module)
+
+    def _render_direct_dependencies(self, selected_module: Module | None) -> None:
+        header = self.query_one("#direct-deps-header", Static)
+        body = self.query_one("#direct-deps-list", Static)
+
+        if selected_module is None:
+            header.update("")
+            body.update("")
+            return
+
+        header.update(f"diretas de {selected_module.name} (m adiciona)")
+        direct = [dep for dep in selected_module.dependencies if not dep.managed]
+        if not direct:
+            body.update("[dim]nenhuma dependencia direta[/]")
+            return
+
+        lines = []
+        for dep in direct:
+            version = dep.version or "-"
+            scope = dep.scope or "compile"
+            lines.append(
+                f"{dep.group_id}:[bold]{dep.artifact_id}[/] {version} · [dim]{scope}[/]"
             )
-        list_view.index = 0
+        body.update("\n".join(lines))
 
     def focus_default(self) -> None:
         self.query_one("#bom-list", ListView).focus()
@@ -88,6 +119,9 @@ class BomPanel(Panel):
 
     def action_add_dependency(self) -> None:
         self.screen.add_dependency()
+
+    def action_add_direct_dependency(self) -> None:
+        self.screen.add_direct_dependency()
 
     def dependency_at(self, index: int | None) -> Dependency | None:
         if index is not None and 0 <= index < len(self._dependencies):

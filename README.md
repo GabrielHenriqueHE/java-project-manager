@@ -24,7 +24,7 @@ Ou, em modo de desenvolvimento (com console de debug do Textual):
 uv run textual run --dev src/manager/app.py
 ```
 
-A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `x` remove um diretório por caminho livre (Estrutura), `b` registra o diretório ativo no build (Estrutura), `u` desregistra (Estrutura), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
+A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `x` remove um diretório por caminho livre (Estrutura), `b` registra o diretório ativo no build (Estrutura), `u` desregistra (Estrutura), `m` adiciona dependência direta do módulo selecionado (BOM+Dependências), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
 
 ## Rodando os testes
 
@@ -45,5 +45,6 @@ uv run pytest
 - **Fase 9 — Marcar Diretório Registrado no Build** (concluída): a árvore do Painel [5] distingue visualmente um diretório de convenção padrão de um registrado via `build-helper-maven-plugin` (sufixo `(build)`).
 - **Fase 10 — Desregistrar Diretório do Build** (concluída): `unregister_directory_role` remove a entrada de um diretório já registrado, sem tocar o diretório em disco. Painel [5], binding `u`.
 - **Fase 11 — Remover Diretório Não-Vazio / Caminho Livre** (concluída): `remove_directory` ganhou `force` para remover recursivamente com confirmação; `x` abre um formulário de caminho livre para remover qualquer diretório do módulo, não só os itens do checklist.
+- **Fase 12 — Dependência Direta na TUI** (concluída): Painel [4] BOM+Dependências ganhou uma seção com as dependências diretas do módulo selecionado no Painel [3]; `m` adiciona/edita uma dependência direta (`managed=False`) desse módulo, qualquer que seja o `packaging` (sem mudança no adapter, que já suportava isso desde a Fase 2).
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.
