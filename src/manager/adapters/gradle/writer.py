@@ -4,7 +4,9 @@ from typing import Callable, Literal
 
 from manager.adapters.gradle.parser import (
     CONFIG_NAMES,
+    INCLUDE_RE,
     PLUGIN_ID_RE,
+    QUOTED_RE,
     find_block,
     split_coordinate,
 )
@@ -446,3 +448,81 @@ class GradleWriter:
             self.set_packaging(path, packaging)
         self.set_scalar(path, "group", group_id)
         self.set_scalar(path, "version", version)
+
+    # ---- settings.gradle(.kts): include(...) ----
+
+    def add_include(self, path: Path, artifact_id: str) -> None:
+        """Registra `artifact_id` em `include(...)`, anexando a lista
+        existente (sem duplicar se ja estiver la) ou criando a
+        declaracao do zero se `settings.gradle(.kts)` ainda nao tiver
+        nenhuma.
+        """
+        text = path.read_text()
+        dialect = self.dialect(path)
+        entry = self.quote(dialect, artifact_id)
+
+        match = INCLUDE_RE.search(text)
+        if match is None:
+            line = (
+                f"include({entry})\n" if dialect == "kotlin" else f"include {entry}\n"
+            )
+            text = (text.rstrip("\n") + "\n" + line) if text.strip() else line
+        else:
+            existing = QUOTED_RE.findall(match.group(1))
+            if artifact_id in existing:
+                return
+            insertion_point = match.end(1)
+            text = text[:insertion_point] + f", {entry}" + text[insertion_point:]
+
+        path.write_text(text)
+
+    # ---- criacao de build.gradle(.kts) do zero ----
+
+    def create_build_file(
+        self,
+        path: Path,
+        *,
+        packaging: str,
+        group_id: str | None,
+        version: str | None,
+        dependencies: list[Dependency],
+    ) -> None:
+        """Monta um `build.gradle`/`build.gradle.kts` novo, mesma ordem
+        de secoes das fixtures: `plugins{}`, `group`/`version`,
+        `dependencies{}` (com `constraints{}` aninhado para as
+        gerenciadas). Usado por `add_module` e `create_project`.
+        """
+        dialect = self.dialect(path)
+        plugin_ids = [_PLATFORM_PLUGIN_ID] if packaging == "pom" else ["java"]
+        sections = [self._render_plugins_block(dialect, plugin_ids)]
+
+        meta_lines = []
+        if group_id:
+            meta_lines.append(f"group = {self.quote(dialect, group_id)}")
+        if version:
+            meta_lines.append(f"version = {self.quote(dialect, version)}")
+        if meta_lines:
+            sections.append("\n".join(meta_lines))
+
+        direct = [dep for dep in dependencies if not dep.managed]
+        managed = [dep for dep in dependencies if dep.managed]
+        if direct or managed:
+            body_lines = [
+                self._render_dep_line(
+                    dialect,
+                    _SCOPE_TO_CONFIG.get(dep.scope, "implementation"),
+                    dep,
+                    "    ",
+                ).rstrip("\n")
+                for dep in direct
+            ]
+            if managed:
+                constraint_body = "\n".join(
+                    self._render_dep_line(dialect, "api", dep, "        ").rstrip("\n")
+                    for dep in managed
+                )
+                body_lines.append("    constraints {\n" + constraint_body + "\n    }")
+            sections.append("dependencies {\n" + "\n".join(body_lines) + "\n}")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n\n".join(sections) + "\n")

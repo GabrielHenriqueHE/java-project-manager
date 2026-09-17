@@ -173,7 +173,57 @@ class GradleAdapter(BuildToolAdapter):
     def add_module(
         self, project: Project, module: Module, *, parent_name: str | None = None
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="add_module"))
+        settings_path = find_settings_file(project.root_path)
+        if settings_path is None:
+            raise ValueError(
+                f"Projeto nao tem settings.gradle(.kts) em '{project.root_path}'"
+            )
+
+        if parent_name is not None:
+            parent = find_module(project.root_module, parent_name)
+            if parent is None:
+                raise ValueError(
+                    f"Modulo pai '{parent_name}' nao encontrado no projeto"
+                )
+            if parent.relative_path != project.root_module.relative_path:
+                raise ValueError(
+                    "Gradle so suporta modulos filhos diretos da raiz nesta "
+                    f"fase; '{parent_name}' nao e a raiz"
+                )
+
+        artifact_id = module.metadata.artifact_id
+        if find_module(project.root_module, artifact_id) is not None:
+            raise ValueError(f"Ja existe um modulo chamado '{artifact_id}' no projeto")
+
+        module_dir = project.root_path / artifact_id
+        if module_dir.exists():
+            raise ValueError(f"O diretorio '{module_dir}' ja existe")
+
+        directory_structure = module.directory_structure
+        all_dirs = {
+            *directory_structure.source_dirs,
+            *directory_structure.test_dirs,
+            *directory_structure.resource_dirs,
+            *directory_structure.test_resource_dirs,
+        }
+        for rel_dir in all_dirs:
+            (module_dir / rel_dir).mkdir(parents=True, exist_ok=True)
+
+        build_file_name = (
+            "build.gradle.kts"
+            if settings_path.name.endswith(".kts")
+            else "build.gradle"
+        )
+        self._writer.create_build_file(
+            module_dir / build_file_name,
+            packaging=module.metadata.packaging,
+            group_id=module.metadata.group_id,
+            version=module.metadata.version,
+            dependencies=module.dependencies,
+        )
+        self._writer.add_include(settings_path, artifact_id)
+
+        return self.infer_structure(project.root_path)
 
     def remove_module(
         self, project: Project, module_name: str, *, force: bool = False
