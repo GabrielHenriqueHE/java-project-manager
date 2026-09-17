@@ -478,7 +478,7 @@ async def test_structure_panel_removes_empty_checklist_directory(
         assert not created_dir.is_dir()
 
 
-async def test_structure_panel_remove_non_empty_directory_shows_error(
+async def test_structure_panel_remove_non_empty_directory_asks_confirmation(
     project_root, tmp_path
 ):
     registry = ProjectRegistry(tmp_path / "registry.json")
@@ -510,8 +510,44 @@ async def test_structure_panel_remove_non_empty_directory_shows_error(
         await pilot.press("d")
         await pilot.pause()
 
+        assert type(app.screen).__name__ == "ConfirmModal"
         assert target_dir.is_dir()
         assert screen.project is project_before
+
+
+async def test_structure_panel_remove_non_empty_directory_confirmed_removes_recursively(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        await pilot.press("space")
+        await pilot.press("space")
+        await pilot.pause()
+        active_module = panel._modules[panel._active_index]
+        target_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+        assert active_module.name == "core"
+
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.click("#confirm-yes")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert not target_dir.exists()
 
 
 async def test_structure_panel_remove_missing_directory_is_a_no_op(
@@ -782,6 +818,84 @@ async def test_structure_panel_custom_directory_cancel_does_not_change_anything(
 
         assert isinstance(app.screen, MainScreen)
         assert screen.project is project_before
+
+
+async def test_structure_panel_removes_custom_directory_by_free_path(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        active_module = panel._modules[panel._active_index]
+        target_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "proto"
+        )
+        target_dir.mkdir(parents=True)
+
+        await pilot.press("x")
+        await pilot.pause()
+        form = app.screen
+        assert type(form).__name__ == "DirectoryFormScreen"
+        form.query_one("#field-path", Input).value = "src/main/proto"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert not target_dir.exists()
+
+
+async def test_structure_panel_remove_custom_directory_non_empty_asks_confirmation(
+    project_root, tmp_path
+):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("5")
+        await pilot.pause()
+        panel = screen.query_one(StructurePanel)
+        await pilot.press("space")
+        await pilot.press("space")
+        await pilot.pause()
+        active_module = panel._modules[panel._active_index]
+        assert active_module.name == "core"
+        target_dir = (
+            project_root / active_module.relative_path / "src" / "main" / "java"
+        )
+
+        await pilot.press("x")
+        await pilot.pause()
+        form = app.screen
+        form.query_one("#field-path", Input).value = "src/main/java"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert type(app.screen).__name__ == "ConfirmModal"
+        assert target_dir.is_dir()
+
+        await pilot.click("#confirm-yes")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert not target_dir.exists()
 
 
 async def test_command_mode_creates_module_and_can_be_cancelled(project_root, tmp_path):

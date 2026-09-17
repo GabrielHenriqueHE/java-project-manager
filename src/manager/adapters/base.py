@@ -23,6 +23,14 @@ class DependentModuleConflict(Exception):
         )
 
 
+class DirectoryNotEmptyConflict(Exception):
+    """Levantado quando remove_directory(force=False) encontra um diretorio nao-vazio."""
+
+    def __init__(self, relative_path: str):
+        self.relative_path = relative_path
+        super().__init__(f"'{relative_path}' nao esta vazio")
+
+
 class BuildToolAdapter(ABC):
     build_tool: BuildTool
 
@@ -96,13 +104,16 @@ class BuildToolAdapter(ABC):
 
     @abstractmethod
     def remove_directory(
-        self, project: Project, module_name: str, relative_path: Path
+        self, project: Project, module_name: str, relative_path: Path, *, force: bool = False
     ) -> Project:
-        """Remove relative_path (relativo a raiz do modulo) do disco, se vazio.
+        """Remove relative_path (relativo a raiz do modulo) do disco.
 
         Levanta ValueError se o modulo nao existir, se relative_path
-        escapar do diretorio do modulo, se o diretorio nao existir, ou
-        se nao estiver vazio. Nunca remove recursivamente.
+        escapar do diretorio do modulo, se o diretorio nao existir, ou se
+        relative_path resolver para o proprio diretorio do modulo. Se o
+        diretorio nao estiver vazio, levanta DirectoryNotEmptyConflict
+        quando force=False (nada e alterado); com force=True remove
+        recursivamente.
         """
 
     @abstractmethod

@@ -6,7 +6,11 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, ListView, Static
 
-from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
+from manager.adapters.base import (
+    BuildToolAdapter,
+    DependentModuleConflict,
+    DirectoryNotEmptyConflict,
+)
 from manager.models import BuildFile, Dependency, Module, Project, ProjectMetadata
 from manager.screens.create_project import CreateProjectScreen
 from manager.screens.export_manifest import ExportManifestScreen
@@ -333,16 +337,48 @@ class MainScreen(Screen):
         if self.project is None or self._adapter is None:
             self.notify("Nenhum projeto selecionado", severity="error")
             return
-        try:
-            updated = self._adapter.remove_directory(
-                self.project, module.name, Path(relative_path)
-            )
-        except ValueError as exc:
-            severity = "warning" if "nao existe" in str(exc) else "error"
-            self.notify(str(exc), severity=severity)
+
+        def _do_remove(force: bool) -> None:
+            try:
+                updated = self._adapter.remove_directory(
+                    self.project, module.name, Path(relative_path), force=force
+                )
+            except DirectoryNotEmptyConflict:
+                message = (
+                    f"'{relative_path}' nao esta vazio. Remover mesmo assim "
+                    "(todo o conteudo sera apagado)?"
+                )
+
+                def _on_confirm(confirmed: bool | None) -> None:
+                    if confirmed:
+                        _do_remove(force=True)
+
+                self.app.push_screen(ConfirmModal(message), _on_confirm)
+                return
+            except ValueError as exc:
+                severity = "warning" if "nao existe" in str(exc) else "error"
+                self.notify(str(exc), severity=severity)
+                return
+
+            self.notify(f"'{relative_path}' removido")
+            self.set_project(updated)
+
+        _do_remove(force=False)
+
+    def remove_custom_directory(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
             return
-        self.notify(f"'{relative_path}' removido")
-        self.set_project(updated)
+
+        def _on_submit(relative_path: str | None) -> None:
+            if relative_path is None:
+                return
+            self.remove_directory(module, relative_path)
+
+        self.app.push_screen(
+            DirectoryFormScreen(title="Remover diretorio", confirm_label="Remover"),
+            _on_submit,
+        )
 
     def register_build_source(self, module: Module) -> None:
         if self.project is None or self._adapter is None:

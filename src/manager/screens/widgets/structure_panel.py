@@ -115,6 +115,7 @@ class StructurePanel(Panel):
         ("enter", "create_selected", "criar"),
         ("n", "add_custom_directory", "novo"),
         ("d", "remove_selected", "remover"),
+        ("x", "remove_custom_directory", "remover custom"),
         ("b", "register_build_source", "build"),
         ("u", "unregister_build_source", "desregistrar"),
     ]
@@ -214,6 +215,12 @@ class StructurePanel(Panel):
         active_module = self._modules[self._active_index]
         relative_path = _CHECKLIST_DIRS[self._checklist_index]
         self.screen.remove_directory(active_module, relative_path)
+
+    def action_remove_custom_directory(self) -> None:
+        if not self._modules:
+            return
+        active_module = self._modules[self._active_index]
+        self.screen.remove_custom_directory(active_module)
 
     def action_register_build_source(self) -> None:
         if not self._modules:

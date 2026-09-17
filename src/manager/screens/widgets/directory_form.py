@@ -6,12 +6,25 @@ from textual.widgets import Button, Input, Static
 
 
 class DirectoryFormScreen(ModalScreen[str | None]):
-    """Formulario de caminho livre para criar um diretorio customizado.
+    """Formulario de caminho livre para criar ou remover um diretorio
+    customizado - o par de operacoes usa o mesmo formulario (um campo:
+    caminho relativo ao modulo), so title/confirm_label mudam.
 
-    Reaproveita MainScreen.add_directory (mesma operacao ja usada pelo
-    checklist fixo do Painel [5]) - este form so oferece uma segunda
-    porta de entrada de UI, sem nenhuma mudanca no adapter.
+    Reaproveita MainScreen.add_directory/remove_directory (mesmas
+    operacoes ja usadas pelo checklist fixo do Painel [5]) - este form so
+    oferece uma segunda porta de entrada de UI, sem nenhuma mudanca no
+    adapter.
     """
+
+    def __init__(
+        self,
+        *,
+        title: str = "Novo diretorio",
+        confirm_label: str = "Criar",
+    ) -> None:
+        super().__init__()
+        self._title = title
+        self._confirm_label = confirm_label
 
     DEFAULT_CSS = """
     DirectoryFormScreen {
@@ -37,11 +50,11 @@ class DirectoryFormScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("Novo diretorio"),
+            Static(self._title),
             Static("Caminho relativo ao modulo"),
             Input(placeholder="ex.: src/main/proto", id="field-path"),
             Static(id="form-feedback"),
-            Button("Criar", id="form-confirm", variant="primary"),
+            Button(self._confirm_label, id="form-confirm", variant="primary"),
             Button("Cancelar", id="form-cancel"),
         )
 

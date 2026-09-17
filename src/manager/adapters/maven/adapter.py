@@ -3,7 +3,11 @@ from pathlib import Path
 
 from lxml import etree
 
-from manager.adapters.base import BuildToolAdapter, DependentModuleConflict
+from manager.adapters.base import (
+    BuildToolAdapter,
+    DependentModuleConflict,
+    DirectoryNotEmptyConflict,
+)
 from manager.adapters.maven.directory import (
     STANDARD_DIRS,
     detect_directory_structure,
@@ -225,7 +229,12 @@ class MavenAdapter(BuildToolAdapter):
         return self.infer_structure(project.root_path)
 
     def remove_directory(
-        self, project: Project, module_name: str, relative_path: Path
+        self,
+        project: Project,
+        module_name: str,
+        relative_path: Path,
+        *,
+        force: bool = False,
     ) -> Project:
         target = self._find_module(project.root_module, module_name)
         if target is None:
@@ -241,9 +250,11 @@ class MavenAdapter(BuildToolAdapter):
             raise ValueError(f"'{relative_path}' nao existe")
 
         if any(target_path.iterdir()):
-            raise ValueError(f"'{relative_path}' nao esta vazio")
-
-        target_path.rmdir()
+            if not force:
+                raise DirectoryNotEmptyConflict(str(relative_path))
+            shutil.rmtree(target_path)
+        else:
+            target_path.rmdir()
 
         return self.infer_structure(project.root_path)
 
