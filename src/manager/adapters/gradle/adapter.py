@@ -5,6 +5,7 @@ from manager.adapters.base import BuildToolAdapter, DirectoryNotEmptyConflict
 from manager.adapters.common.lookup import find_module, resolve_module_relative_path
 from manager.adapters.gradle.directory import detect_directory_structure
 from manager.adapters.gradle.parser import (
+    SETTINGS_FILE_NAMES,
     ParsedGradleBuild,
     ParsedSettings,
     find_build_file,
@@ -12,6 +13,7 @@ from manager.adapters.gradle.parser import (
     parse_build_file,
     parse_settings_file,
 )
+from manager.adapters.gradle.writer import GradleWriter
 from manager.manifest import ModuleManifest
 from manager.models import (
     BuildFile,
@@ -39,6 +41,9 @@ class GradleAdapter(BuildToolAdapter):
     """
 
     build_tool = "gradle"
+
+    def __init__(self, writer: GradleWriter | None = None):
+        self._writer = writer or GradleWriter()
 
     def detect(self, root_path: Path) -> bool:
         return (
@@ -179,7 +184,44 @@ class GradleAdapter(BuildToolAdapter):
     def update_metadata(
         self, project: Project, module_name: str, metadata: ProjectMetadata
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="update_metadata"))
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if metadata.artifact_id != target.metadata.artifact_id:
+            raise ValueError("Renomear artifactId nao e suportado")
+
+        if (
+            metadata.packaging != "pom"
+            and metadata.packaging != target.metadata.packaging
+            and (target.submodules or target.is_bom)
+        ):
+            raise ValueError(
+                f"Modulo '{target.name}' tem submodulos ou e o BOM do projeto; "
+                "packaging precisa continuar 'pom'"
+            )
+
+        if target.build_file.path.name in SETTINGS_FILE_NAMES:
+            raise ValueError(
+                f"Modulo '{target.name}' nao tem build.gradle(.kts); crie um "
+                "antes de definir metadados"
+            )
+
+        packaging = (
+            metadata.packaging
+            if metadata.packaging != target.metadata.packaging
+            else None
+        )
+
+        build_path = project.root_path / target.build_file.path
+        self._writer.update_metadata(
+            build_path,
+            group_id=metadata.group_id,
+            version=metadata.version,
+            packaging=packaging,
+        )
+
+        return self.infer_structure(project.root_path)
 
     def add_directory(
         self, project: Project, module_name: str, relative_path: Path

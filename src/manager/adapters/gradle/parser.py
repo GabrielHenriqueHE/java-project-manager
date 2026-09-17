@@ -10,7 +10,7 @@ SETTINGS_FILE_NAMES = ("settings.gradle.kts", "settings.gradle")
 _JAVA_PLUGIN_IDS = frozenset({"java", "java-library", "application"})
 _PLATFORM_PLUGIN_ID = "java-platform"
 
-_CONFIG_NAMES = (
+CONFIG_NAMES = (
     "implementation",
     "api",
     "compileOnly",
@@ -22,7 +22,7 @@ _CONFIG_NAMES = (
     "testAnnotationProcessor",
 )
 
-_CONFIG_TO_SCOPE: dict[str, str | None] = {
+CONFIG_TO_SCOPE: dict[str, str | None] = {
     "implementation": "compile",
     "api": "compile",
     "compileOnly": "provided",
@@ -34,17 +34,17 @@ _CONFIG_TO_SCOPE: dict[str, str | None] = {
     "testAnnotationProcessor": "test",
 }
 
-_PLUGIN_ID_RE = re.compile(r"id\s*\(?\s*['\"]([\w.\-]+)['\"]\s*\)?")
-_DEP_LINE_RE = re.compile(
-    r"^[ \t]*(?P<config>" + "|".join(_CONFIG_NAMES) + r")"
+PLUGIN_ID_RE = re.compile(r"id\s*\(?\s*['\"]([\w.\-]+)['\"]\s*\)?")
+DEP_LINE_RE = re.compile(
+    r"^[ \t]*(?P<config>" + "|".join(CONFIG_NAMES) + r")"
     r"\s*\(?\s*"
     r"(?P<platform>platform\s*\(\s*)?"
     r"['\"](?P<coord>[^'\"]+)['\"]",
     re.MULTILINE,
 )
-_ROOT_NAME_RE = re.compile(r"rootProject\.name\s*=\s*['\"]([^'\"]+)['\"]")
-_INCLUDE_RE = re.compile(r"\binclude\s*\(?\s*((?:['\"][^'\"]+['\"]\s*,?\s*)+)\)?")
-_QUOTED_RE = re.compile(r"['\"]([^'\"]+)['\"]")
+ROOT_NAME_RE = re.compile(r"rootProject\.name\s*=\s*['\"]([^'\"]+)['\"]")
+INCLUDE_RE = re.compile(r"\binclude\s*\(?\s*((?:['\"][^'\"]+['\"]\s*,?\s*)+)\)?")
+QUOTED_RE = re.compile(r"['\"]([^'\"]+)['\"]")
 
 
 @dataclass
@@ -90,8 +90,8 @@ def parse_build_file(path: Path) -> ParsedGradleBuild:
     """
     text = path.read_text()
 
-    plugins_span = _find_block(text, "plugins")
-    plugin_ids = _PLUGIN_ID_RE.findall(plugins_span[2]) if plugins_span else []
+    plugins_span = find_block(text, "plugins")
+    plugin_ids = PLUGIN_ID_RE.findall(plugins_span[2]) if plugins_span else []
     text_without_plugins = (
         text[: plugins_span[0]] + text[plugins_span[1] :] if plugins_span else text
     )
@@ -130,12 +130,12 @@ class ParsedSettings:
 
 def parse_settings_file(path: Path) -> ParsedSettings:
     text = path.read_text()
-    root_match = _ROOT_NAME_RE.search(text)
+    root_match = ROOT_NAME_RE.search(text)
     root_name = root_match.group(1) if root_match else None
 
     modules: list[tuple[str, str]] = []
-    for include_match in _INCLUDE_RE.finditer(text):
-        for quoted in _QUOTED_RE.finditer(include_match.group(1)):
+    for include_match in INCLUDE_RE.finditer(text):
+        for quoted in QUOTED_RE.finditer(include_match.group(1)):
             raw = quoted.group(1)
             colon_path = raw[1:] if raw.startswith(":") else raw
             if not colon_path:
@@ -154,16 +154,16 @@ def _parse_dependencies_block(
     direct: list[Dependency] = []
 
     remainder = deps_block
-    constraints_span = _find_block(deps_block, "constraints")
+    constraints_span = find_block(deps_block, "constraints")
     if constraints_span is not None:
         outer_start, outer_end, inner = constraints_span
-        for match in _DEP_LINE_RE.finditer(inner):
+        for match in DEP_LINE_RE.finditer(inner):
             dep = _dependency_from_match(match, managed=True)
             if dep is not None:
                 managed.append(dep)
         remainder = deps_block[:outer_start] + deps_block[outer_end:]
 
-    for match in _DEP_LINE_RE.finditer(remainder):
+    for match in DEP_LINE_RE.finditer(remainder):
         is_platform = match.group("platform") is not None
         dep = _dependency_from_match(match, managed=is_platform)
         if dep is None:
@@ -174,7 +174,7 @@ def _parse_dependencies_block(
 
 
 def _dependency_from_match(match: re.Match[str], *, managed: bool) -> Dependency | None:
-    parsed = _split_coordinate(match.group("coord"))
+    parsed = split_coordinate(match.group("coord"))
     if parsed is None:
         return None
     group_id, artifact_id, version = parsed
@@ -183,12 +183,12 @@ def _dependency_from_match(match: re.Match[str], *, managed: bool) -> Dependency
         group_id=group_id,
         artifact_id=artifact_id,
         version=version,
-        scope=None if managed else _CONFIG_TO_SCOPE.get(config),
+        scope=None if managed else CONFIG_TO_SCOPE.get(config),
         managed=managed,
     )
 
 
-def _split_coordinate(raw: str) -> tuple[str, str, str | None] | None:
+def split_coordinate(raw: str) -> tuple[str, str, str | None] | None:
     """Divide uma notacao 'group:artifact[:version]' de dependencia Gradle.
 
     Retorna None se `raw` for uma referencia de projeto Gradle (comeca com
@@ -211,11 +211,11 @@ def _extract_scalar(text: str, name: str) -> str | None:
 
 
 def _extract_block(text: str, name: str) -> str | None:
-    found = _find_block(text, name)
+    found = find_block(text, name)
     return found[2] if found is not None else None
 
 
-def _find_block(text: str, name: str) -> tuple[int, int, str] | None:
+def find_block(text: str, name: str) -> tuple[int, int, str] | None:
     """Localiza o primeiro bloco `name { ... }`, com contagem de chaves
     para lidar com blocos aninhados corretamente. Retorna
     (inicio_externo, fim_externo, conteudo_interno); fim_externo e o

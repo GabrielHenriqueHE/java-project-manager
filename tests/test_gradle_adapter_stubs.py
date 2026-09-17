@@ -33,11 +33,6 @@ def test_update_dependency_is_a_stub(project):
         GradleAdapter().update_dependency(project, "core", None)
 
 
-def test_update_metadata_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().update_metadata(project, "core", None)
-
-
 def test_remove_dependency_is_a_stub(project):
     with pytest.raises(NotImplementedError):
         GradleAdapter().remove_dependency(project, "com.example", "core")

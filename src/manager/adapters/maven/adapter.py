@@ -8,7 +8,14 @@ from manager.adapters.base import (
     DependentModuleConflict,
     DirectoryNotEmptyConflict,
 )
-from manager.adapters.common.lookup import find_module, resolve_module_relative_path
+from manager.adapters.common.lookup import (
+    find_bom_module,
+    find_dependents,
+    find_managed_dependency_owner,
+    find_module,
+    find_parent,
+    resolve_module_relative_path,
+)
 from manager.adapters.maven.directory import (
     STANDARD_DIRS,
     detect_directory_structure,
@@ -268,41 +275,13 @@ class MavenAdapter(BuildToolAdapter):
         return find_module(module, name)
 
     def _find_parent(self, module: Module, target: Module) -> Module | None:
-        for sub in module.submodules:
-            if sub.relative_path == target.relative_path:
-                return module
-            found = self._find_parent(sub, target)
-            if found is not None:
-                return found
-        return None
+        return find_parent(module, target)
 
     def _find_bom_module(self, module: Module) -> Module | None:
-        if module.is_bom:
-            return module
-        for sub in module.submodules:
-            found = self._find_bom_module(sub)
-            if found is not None:
-                return found
-        return None
+        return find_bom_module(module)
 
     def _find_dependents(self, root_module: Module, target: Module) -> list[Module]:
-        target_key = (target.metadata.group_id, target.metadata.artifact_id)
-        dependents: list[Module] = []
-
-        def walk(module: Module) -> None:
-            if module.relative_path != target.relative_path:
-                for dep in module.dependencies:
-                    if (
-                        not dep.managed
-                        and (dep.group_id, dep.artifact_id) == target_key
-                    ):
-                        dependents.append(module)
-                        break
-            for sub in module.submodules:
-                walk(sub)
-
-        walk(root_module)
-        return dependents
+        return find_dependents(root_module, target)
 
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency
@@ -421,18 +400,7 @@ class MavenAdapter(BuildToolAdapter):
     def _find_managed_dependency_owner(
         self, module: Module, group_id: str, artifact_id: str
     ) -> Module | None:
-        for dep in module.dependencies:
-            if (
-                dep.managed
-                and dep.group_id == group_id
-                and dep.artifact_id == artifact_id
-            ):
-                return module
-        for sub in module.submodules:
-            found = self._find_managed_dependency_owner(sub, group_id, artifact_id)
-            if found is not None:
-                return found
-        return None
+        return find_managed_dependency_owner(module, group_id, artifact_id)
 
     def register_directory_role(
         self,
