@@ -8,6 +8,10 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 Full product context, glossary, and the architectural decision log live in `specs/00-overview.md` — read it before making structural changes. Development follows a lightweight, custom Spec-Driven Development flow documented there (`specs/features/`, `specs/phases/`); `specs/phases/<phase>/tasks.md` is the source of truth for what's actually done.
 
+## Workflow
+
+Work directly on the main checkout — **no need to create a git worktree to make code changes in this repo**. There's a single active line of work here, and a worktree only adds isolation overhead this project doesn't need. Edit files in place, run the tests, and commit on `main` (or whatever branch is already checked out) when asked to. (`.claude/settings.json` sets `worktree.bgIsolation: "none"` so background sessions aren't forced into a worktree either.)
+
 ## Commands
 
 ```bash
