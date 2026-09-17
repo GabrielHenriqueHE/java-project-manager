@@ -289,6 +289,93 @@ class GradleWriter:
 
         path.write_text(new_text)
 
+    def _remove_dep_line(
+        self,
+        text: str,
+        group_id: str,
+        artifact_id: str,
+        *,
+        exclude_span: tuple[int, int] | None = None,
+    ) -> tuple[str, bool]:
+        """Remove, dentro de `text`, a primeira linha de dependencia que
+        bate com (group_id, artifact_id). Retorna (texto, True) se
+        removeu, ou (texto original, False) se nao achou nada. Mesmo
+        `exclude_span` de `_upsert_dep_line_in_text`, mesmo motivo.
+        """
+        for match in _FULL_DEP_LINE_RE.finditer(text):
+            if exclude_span and exclude_span[0] <= match.start() < exclude_span[1]:
+                continue
+            parsed = split_coordinate(match.group("coord"))
+            if parsed is None:
+                continue
+            found_group, found_artifact, _ = parsed
+            if found_group == group_id and found_artifact == artifact_id:
+                return text[: match.start()] + text[match.end() :], True
+        return text, False
+
+    @staticmethod
+    def _remove_span_and_collapse_blank_lines(text: str, start: int, end: int) -> str:
+        """Remove `text[start:end]` e colapsa a sequencia de linhas em
+        branco que a remocao deixa para trás (no maximo uma linha em
+        branco), cosmetico - o parser nao se importa com espacamento.
+        """
+        new_text = text[:start] + text[end:]
+        return re.sub(r"\n[ \t]*\n[ \t]*\n", "\n\n", new_text)
+
+    def remove_managed_dependency(
+        self, path: Path, group_id: str, artifact_id: str
+    ) -> bool:
+        """Remove a entrada gerenciada (group_id, artifact_id) de dentro
+        de `constraints{}`. Colapsa `constraints{}` inteiro se ficar
+        vazio, e `dependencies{}` inteiro se tambem ficar vazio depois
+        disso (mesmo espirito, em texto, de
+        `MavenPomWriter.remove_managed_dependency`). Retorna False
+        (sem alterar nada) se `dependencies{}`/`constraints{}` nao
+        existirem ou a entrada nao for encontrada.
+        """
+        text = path.read_text()
+
+        deps_span = find_block(text, "dependencies")
+        if deps_span is None:
+            return False
+        d_start, d_end, d_inner = deps_span
+        d_content_end = d_end - 1
+        d_content_start = d_content_end - len(d_inner)
+        d_header = text[d_start:d_content_start]
+        d_closing = text[d_content_end:d_end]
+
+        constraints_span = find_block(d_inner, "constraints")
+        if constraints_span is None:
+            return False
+        c_start, c_end, c_inner = constraints_span
+        c_content_end = c_end - 1
+        c_content_start = c_content_end - len(c_inner)
+        c_header = d_inner[c_start:c_content_start]
+        c_closing = d_inner[c_content_end:c_end]
+
+        new_c_inner, removed = self._remove_dep_line(c_inner, group_id, artifact_id)
+        if not removed:
+            return False
+
+        if new_c_inner.strip():
+            new_d_inner = (
+                d_inner[:c_start] + c_header + new_c_inner + c_closing + d_inner[c_end:]
+            )
+        else:
+            new_d_inner = self._remove_span_and_collapse_blank_lines(
+                d_inner, c_start, c_end
+            )
+
+        if new_d_inner.strip():
+            new_text = (
+                text[:d_start] + d_header + new_d_inner + d_closing + text[d_end:]
+            )
+        else:
+            new_text = self._remove_span_and_collapse_blank_lines(text, d_start, d_end)
+
+        path.write_text(new_text)
+        return True
+
     # ---- update_metadata orchestration ----
 
     def update_metadata(

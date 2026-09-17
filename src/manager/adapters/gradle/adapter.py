@@ -2,7 +2,11 @@ import shutil
 from pathlib import Path
 
 from manager.adapters.base import BuildToolAdapter, DirectoryNotEmptyConflict
-from manager.adapters.common.lookup import find_module, resolve_module_relative_path
+from manager.adapters.common.lookup import (
+    find_managed_dependency_owner,
+    find_module,
+    resolve_module_relative_path,
+)
 from manager.adapters.gradle.directory import detect_directory_structure
 from manager.adapters.gradle.parser import (
     SETTINGS_FILE_NAMES,
@@ -299,7 +303,18 @@ class GradleAdapter(BuildToolAdapter):
     def remove_dependency(
         self, project: Project, group_id: str, artifact_id: str
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="remove_dependency"))
+        owner = find_managed_dependency_owner(
+            project.root_module, group_id, artifact_id
+        )
+        if owner is None:
+            raise ValueError(
+                f"Dependencia gerenciada '{group_id}:{artifact_id}' nao encontrada"
+            )
+
+        build_path = project.root_path / owner.build_file.path
+        self._writer.remove_managed_dependency(build_path, group_id, artifact_id)
+
+        return self.infer_structure(project.root_path)
 
     def remove_direct_dependency(
         self, project: Project, module_name: str, group_id: str, artifact_id: str
