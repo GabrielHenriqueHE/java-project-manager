@@ -127,6 +127,17 @@ class BuildToolAdapter(ABC):
         """
 
     @abstractmethod
+    def remove_direct_dependency(
+        self, project: Project, module_name: str, group_id: str, artifact_id: str
+    ) -> Project:
+        """Remove a dependencia direta (managed=False) identificada por
+        (group_id, artifact_id) de um modulo especifico.
+
+        Levanta ValueError se o modulo nao existir ou nao tiver essa
+        dependencia direta declarada.
+        """
+
+    @abstractmethod
     def register_directory_role(
         self,
         project: Project,

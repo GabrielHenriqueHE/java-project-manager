@@ -413,6 +413,22 @@ class MavenAdapter(BuildToolAdapter):
 
         return self.infer_structure(project.root_path)
 
+    def remove_direct_dependency(
+        self, project: Project, module_name: str, group_id: str, artifact_id: str
+    ) -> Project:
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        pom_path = project.root_path / target.build_file.path
+        if not self._writer.remove_dependency(pom_path, group_id, artifact_id):
+            raise ValueError(
+                f"Dependencia direta '{group_id}:{artifact_id}' nao encontrada em "
+                f"'{target.name}'"
+            )
+
+        return self.infer_structure(project.root_path)
+
     def _find_managed_dependency_owner(
         self, module: Module, group_id: str, artifact_id: str
     ) -> Module | None:

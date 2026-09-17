@@ -1253,6 +1253,82 @@ async def test_add_direct_dependency_to_selected_module_via_bom_panel(
         assert "commons-io" in str(direct_list.render())
 
 
+async def test_remove_direct_dependency_via_bom_panel(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+        lv = screen.query_one("#modules-list", ListView)
+        lv.index = 3  # root(0) -> bom(1) -> core(2) -> api(3); "api" ja tem
+        # uma dependencia direta para com.example:core na fixture.
+        await pilot.pause()
+        assert screen.selected_module.name == "api"
+
+        await pilot.press("4")
+        await pilot.press("r")
+        await pilot.pause()
+
+        form = app.screen
+        assert type(form).__name__ == "RemoveDependencyFormScreen"
+        form.query_one("#field-group-id", Input).value = "com.example"
+        form.query_one("#field-artifact-id", Input).value = "core"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        api = next(m for m in screen.project.root_module.submodules if m.name == "api")
+        assert not any(
+            dep.artifact_id == "core" and not dep.managed for dep in api.dependencies
+        )
+        # a entrada GERENCIADA de com.example:core no BOM continua intacta.
+        assert "core" in {
+            dep.artifact_id for dep in screen.project.managed_dependencies
+        }
+
+
+async def test_remove_direct_dependency_not_found_shows_error(project_root, tmp_path):
+    registry = ProjectRegistry(tmp_path / "registry.json")
+    registry.add(project_root, "maven")
+    app = _TestApp(registry)
+
+    async with app.run_test(size=(140, 45)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        await pilot.press("1")
+        await pilot.press("j")
+        await pilot.pause()
+
+        await pilot.press("3")
+        await pilot.pause()
+        lv = screen.query_one("#modules-list", ListView)
+        lv.index = 3
+        await pilot.pause()
+        assert screen.selected_module.name == "api"
+        project_before = screen.project
+
+        await pilot.press("4")
+        await pilot.press("r")
+        await pilot.pause()
+
+        form = app.screen
+        form.query_one("#field-group-id", Input).value = "com.unknown"
+        form.query_one("#field-artifact-id", Input).value = "does-not-exist"
+        await pilot.click("#form-confirm")
+        await pilot.pause()
+
+        assert isinstance(app.screen, MainScreen)
+        assert screen.project is project_before
+
+
 async def test_bom_panel_direct_dependencies_follow_module_selection(
     project_root, tmp_path
 ):

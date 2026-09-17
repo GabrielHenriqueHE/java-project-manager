@@ -23,6 +23,7 @@ class BomPanel(Panel):
     BINDINGS = [
         ("n", "add_dependency", "novo"),
         ("m", "add_direct_dependency", "dep. direta"),
+        ("r", "remove_direct_dependency", "remover direta"),
         ("j", "cursor_down", "mover"),
         ("k", "cursor_up", "mover"),
         ("d", "remove_dependency", "remover"),
@@ -122,6 +123,9 @@ class BomPanel(Panel):
 
     def action_add_direct_dependency(self) -> None:
         self.screen.add_direct_dependency()
+
+    def action_remove_direct_dependency(self) -> None:
+        self.screen.remove_direct_dependency()
 
     def dependency_at(self, index: int | None) -> Dependency | None:
         if index is not None and 0 <= index < len(self._dependencies):

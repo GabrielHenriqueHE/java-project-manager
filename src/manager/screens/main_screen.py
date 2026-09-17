@@ -22,6 +22,7 @@ from manager.screens.widgets.build_source_form import BuildSourceFormScreen
 from manager.screens.widgets.command_bar import CommandBar
 from manager.screens.widgets.confirm_dialog import ConfirmModal
 from manager.screens.widgets.dependency_form import DependencyFormScreen
+from manager.screens.widgets.remove_dependency_form import RemoveDependencyFormScreen
 from manager.screens.widgets.directory_form import DirectoryFormScreen
 from manager.screens.widgets.metadata_form import MetadataFormScreen
 from manager.screens.widgets.metadata_panel import MetadataPanel
@@ -294,6 +295,33 @@ class MainScreen(Screen):
             target_module,
             managed=False,
             title=f"Nova dependencia direta de {target_module.name}",
+        )
+
+    def remove_direct_dependency(self) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+        target_module = self.selected_module or self.project.root_module
+
+        def _on_submit(coordinates: tuple[str, str] | None) -> None:
+            if coordinates is None:
+                return
+            group_id, artifact_id = coordinates
+            try:
+                updated = self._adapter.remove_direct_dependency(
+                    self.project, target_module.name, group_id, artifact_id
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify(f"Dependencia '{artifact_id}' removida")
+            self.set_project(updated)
+
+        self.app.push_screen(
+            RemoveDependencyFormScreen(
+                title=f"Remover dependencia direta de {target_module.name}"
+            ),
+            _on_submit,
         )
 
     def _open_dependency_form(
