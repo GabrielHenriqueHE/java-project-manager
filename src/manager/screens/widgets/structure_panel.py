@@ -116,6 +116,7 @@ class StructurePanel(Panel):
         ("n", "add_custom_directory", "novo"),
         ("d", "remove_selected", "remover"),
         ("b", "register_build_source", "build"),
+        ("u", "unregister_build_source", "desregistrar"),
     ]
 
     def __init__(self, **kwargs):
@@ -219,3 +220,9 @@ class StructurePanel(Panel):
             return
         active_module = self._modules[self._active_index]
         self.screen.register_build_source(active_module)
+
+    def action_unregister_build_source(self) -> None:
+        if not self._modules:
+            return
+        active_module = self._modules[self._active_index]
+        self.screen.unregister_build_source(active_module)

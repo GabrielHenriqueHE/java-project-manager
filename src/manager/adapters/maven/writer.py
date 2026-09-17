@@ -327,6 +327,51 @@ class MavenPomWriter:
 
         self._write(tree, pom_path)
 
+    def unregister_directory_role(
+        self, pom_path: Path, relative_path: str, role: DirectoryRole
+    ) -> bool:
+        """Remove o registro de relative_path como fonte/recurso extra do
+        build (inverso de register_directory_role). Retorna False (sem
+        alterar nada) se o build-helper-maven-plugin ou a execution
+        correspondente nao existirem no pom. Limpa em cascata
+        <executions>/<plugin>/<plugins>/<build> que ficam vazios, no mesmo
+        padrao de remove_managed_dependency.
+        """
+        execution_id = f"add-{role}-" + relative_path.replace("/", "-")
+
+        tree, root, ns = self._parse(pom_path)
+        build_el = root.find(f"{ns}build")
+        plugins_el = build_el.find(f"{ns}plugins") if build_el is not None else None
+        plugin_el = (
+            self._find_plugin_element(
+                plugins_el, ns, build_helper.GROUP_ID, build_helper.ARTIFACT_ID
+            )
+            if plugins_el is not None
+            else None
+        )
+        executions_el = plugin_el.find(f"{ns}executions") if plugin_el is not None else None
+        execution_el = (
+            self._find_execution_element(executions_el, ns, execution_id)
+            if executions_el is not None
+            else None
+        )
+        if execution_el is None:
+            return False
+
+        remove_element_preserving_whitespace(execution_el)
+
+        if executions_el.find(f"{ns}execution") is None:
+            remove_element_preserving_whitespace(executions_el)
+            if plugin_el.find(f"{ns}executions") is None:
+                remove_element_preserving_whitespace(plugin_el)
+                if plugins_el.find(f"{ns}plugin") is None:
+                    remove_element_preserving_whitespace(plugins_el)
+                    if build_el.find(f"{ns}plugins") is None:
+                        remove_element_preserving_whitespace(build_el)
+
+        self._write(tree, pom_path)
+        return True
+
     @staticmethod
     def _find_plugin_element(
         plugins_el: etree._Element, ns: str, group_id: str, artifact_id: str

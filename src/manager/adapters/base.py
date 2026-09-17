@@ -131,3 +131,19 @@ class BuildToolAdapter(ABC):
         ainda nao existir em disco (precisa ser criado antes via
         add_directory).
         """
+
+    @abstractmethod
+    def unregister_directory_role(
+        self,
+        project: Project,
+        module_name: str,
+        relative_path: Path,
+        role: DirectoryRole,
+    ) -> Project:
+        """Remove o registro de relative_path como fonte/recurso extra do
+        arquivo de build (inverso de register_directory_role). Nao mexe no
+        diretorio em disco.
+
+        Levanta ValueError se o modulo nao existir ou se (relative_path,
+        role) nao estiver registrado no build.
+        """

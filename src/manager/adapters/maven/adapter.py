@@ -443,6 +443,33 @@ class MavenAdapter(BuildToolAdapter):
 
         return self.infer_structure(project.root_path)
 
+    def unregister_directory_role(
+        self,
+        project: Project,
+        module_name: str,
+        relative_path: Path,
+        role: DirectoryRole,
+    ) -> Project:
+        target = self._find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if role not in _REGISTERABLE_ROLES:
+            raise ValueError(
+                f"role invalido: '{role}' (use um de {sorted(_REGISTERABLE_ROLES)})"
+            )
+
+        pom_path = project.root_path / target.build_file.path
+        if not self._writer.unregister_directory_role(
+            pom_path, str(relative_path), role
+        ):
+            raise ValueError(
+                f"'{relative_path}' nao esta registrado como {role} no build "
+                f"de '{target.name}'"
+            )
+
+        return self.infer_structure(project.root_path)
+
     def create_project(
         self,
         manifest: ModuleManifest,

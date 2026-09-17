@@ -24,7 +24,7 @@ Ou, em modo de desenvolvimento (com console de debug do Textual):
 uv run textual run --dev src/manager/app.py
 ```
 
-A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `b` registra o diretório ativo no build (Estrutura), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
+A tela principal ("mvnforge", ver `specs/design/tui-layout.md`) mostra 5 painéis numerados simultaneamente: `1` Projetos, `2` Metadados, `3` Módulos, `4` BOM+Dependências, `5` Estrutura. Atalhos principais: `1`-`5`/`tab` navega entre painéis, `j`/`k` move dentro de uma lista ou do checklist em Estrutura, `n` cria (projeto/módulo/dependência/diretório customizado), `d` remove, `enter` seleciona/edita (ou cria o diretório destacado em Estrutura), `b` registra o diretório ativo no build (Estrutura), `u` desregistra (Estrutura), `space` alterna o módulo ativo em Estrutura, `:` abre o modo comando (ex.: `:modulo <nome>`).
 
 ## Rodando os testes
 
@@ -43,5 +43,6 @@ uv run pytest
 - **Fase 7 — Exportar Projeto para Manifesto** (concluída): operação inversa — `to_manifest`/`dump_manifest` serializam um projeto carregado para o mesmo dialeto YAML. Painel [1], binding `e`.
 - **Fase 8 — Código-Fonte na Exportação** (concluída): `export_source_files` copia o conteúdo real dos arquivos (não só a estrutura) dos módulos que batem com um padrão de nome; `create_project` reproduz esse conteúdo via `source_root` opcional.
 - **Fase 9 — Marcar Diretório Registrado no Build** (concluída): a árvore do Painel [5] distingue visualmente um diretório de convenção padrão de um registrado via `build-helper-maven-plugin` (sufixo `(build)`).
+- **Fase 10 — Desregistrar Diretório do Build** (concluída): `unregister_directory_role` remove a entrada de um diretório já registrado, sem tocar o diretório em disco. Painel [5], binding `u`.
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.

@@ -365,6 +365,33 @@ class MainScreen(Screen):
 
         self.app.push_screen(BuildSourceFormScreen(), _on_submit)
 
+    def unregister_build_source(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+
+        def _on_submit(result: tuple[str, str] | None) -> None:
+            if result is None:
+                return
+            relative_path, role = result
+            try:
+                updated = self._adapter.unregister_directory_role(
+                    self.project, module.name, Path(relative_path), role
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify(f"'{relative_path}' desregistrado do build")
+            self.set_project(updated)
+
+        self.app.push_screen(
+            BuildSourceFormScreen(
+                title="Desregistrar diretorio do build",
+                confirm_label="Desregistrar",
+            ),
+            _on_submit,
+        )
+
     # ---- navegacao entre paineis ----
 
     def action_focus_panel(self, number: int) -> None:

@@ -14,4 +14,6 @@ Coberto parcialmente pela **Fase 1** (modelo `DirectoryStructure`/`DirectoryNode
 
 **Marcação visual de diretório registrado implementada** na sexta fatia da Fase 4/nona fase geral (`specs/phases/phase-9-marcar-diretorio-registrado/`): a árvore do Painel [5] (`render_project_tree`) sufixa `[dim](build)[/]` em qualquer diretório de `source_dirs`/`test_dirs`/`resource_dirs`/`test_resource_dirs` que não seja o caminho de convenção padrão da sua lista, sem mudança de modelo de domínio nem acoplamento a `manager.adapters.maven` (compara contra os próprios defaults de `DirectoryStructure`).
 
-Ainda fora de escopo: remoção de diretório não-vazio, remoção de um nó qualquer da árvore (só os itens do checklist fixo são acionáveis), e desregistrar um diretório já registrado no build — ficam para fatias futuras.
+**Desregistrar diretório do build implementado** na sétima fatia da Fase 4/décima fase geral (`specs/phases/phase-10-desregistrar-diretorio/`): novo `BuildToolAdapter.unregister_directory_role`, inverso simétrico de `register_directory_role` — remove a `<execution>` correspondente do `build-helper-maven-plugin` (limpando `<executions>`/`<plugin>`/`<plugins>`/`<build>` em cascata quando ficam vazios), sem tocar o diretório em disco. TUI: `BuildSourceFormScreen` ganhou `title`/`confirm_label` parametrizáveis para ser reaproveitado nas duas direções; Painel [5], binding `u`.
+
+Ainda fora de escopo: remoção de diretório não-vazio, remoção de um nó qualquer da árvore (só os itens do checklist fixo são acionáveis) — ficam para fatias futuras.
