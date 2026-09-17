@@ -179,7 +179,34 @@ class GradleAdapter(BuildToolAdapter):
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency
     ) -> Project:
-        raise NotImplementedError(_STUB_MESSAGE.format(method="update_dependency"))
+        target = find_module(project.root_module, module_name)
+        if target is None:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado no projeto")
+
+        if not dependency.group_id or not dependency.artifact_id:
+            raise ValueError("groupId e artifactId sao obrigatorios")
+
+        if dependency.managed:
+            if target.metadata.packaging != "pom":
+                raise ValueError(
+                    f"Modulo '{target.name}' precisa ter packaging 'pom' para "
+                    "receber uma dependencia gerenciada"
+                )
+            if not dependency.version:
+                raise ValueError(
+                    "version e obrigatoria para uma dependencia gerenciada"
+                )
+
+        if target.build_file.path.name in SETTINGS_FILE_NAMES:
+            raise ValueError(
+                f"Modulo '{target.name}' nao tem build.gradle(.kts); crie um "
+                "antes de definir dependencias"
+            )
+
+        build_path = project.root_path / target.build_file.path
+        self._writer.upsert_dependency(build_path, dependency)
+
+        return self.infer_structure(project.root_path)
 
     def update_metadata(
         self, project: Project, module_name: str, metadata: ProjectMetadata

@@ -28,11 +28,6 @@ def test_remove_module_is_a_stub(project):
         GradleAdapter().remove_module(project, "core")
 
 
-def test_update_dependency_is_a_stub(project):
-    with pytest.raises(NotImplementedError):
-        GradleAdapter().update_dependency(project, "core", None)
-
-
 def test_remove_dependency_is_a_stub(project):
     with pytest.raises(NotImplementedError):
         GradleAdapter().remove_dependency(project, "com.example", "core")

@@ -1,11 +1,33 @@
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
-from manager.adapters.gradle.parser import PLUGIN_ID_RE, find_block
+from manager.adapters.gradle.parser import (
+    CONFIG_NAMES,
+    PLUGIN_ID_RE,
+    find_block,
+    split_coordinate,
+)
+from manager.models import Dependency
 
 _JAVA_PLUGIN_IDS = ("java", "java-library", "application")
 _PLATFORM_PLUGIN_ID = "java-platform"
+
+_SCOPE_TO_CONFIG: dict[str | None, str] = {
+    "compile": "implementation",
+    "provided": "compileOnly",
+    "runtime": "runtimeOnly",
+    "test": "testImplementation",
+}
+
+_FULL_DEP_LINE_RE = re.compile(
+    r"^[ \t]*(?P<config>" + "|".join(CONFIG_NAMES) + r")"
+    r"\s*\(?\s*"
+    r"(?P<platform>platform\s*\(\s*)?"
+    r"['\"](?P<coord>[^'\"]+)['\"]"
+    r"\s*\)?\s*\)?[ \t]*\n?",
+    re.MULTILINE,
+)
 
 Dialect = Literal["groovy", "kotlin"]
 
@@ -126,6 +148,146 @@ class GradleWriter:
             re.MULTILINE,
         )
         return pattern.sub("", inner, count=1)
+
+    # ---- blocos aninhados: decomposicao recursiva ----
+
+    @staticmethod
+    def _replace_block_content(
+        text: str, name: str, transform: Callable[[str], str]
+    ) -> str | None:
+        """Aplica `transform(conteudo) -> novo_conteudo` ao conteudo do
+        primeiro bloco `name { ... }` de `text`, preservando cabecalho
+        (`name {`) e fechamento (`}`) tal como estao, e todo o resto do
+        texto ao redor intocado. Retorna None (sem chamar `transform`) se
+        o bloco nao existir - quem chama decide se cria o bloco do zero
+        nesse caso.
+
+        Como `transform` recebe so o conteudo interno como uma string
+        independente, aninhar chamadas (ex.: tratar `constraints{}` de
+        dentro do `transform` de `dependencies{}`) funciona sem nenhuma
+        aritmetica de offset absoluto - cada nivel opera na sua propria
+        substring e devolve uma nova substring, remontada de fora para
+        dentro.
+        """
+        span = find_block(text, name)
+        if span is None:
+            return None
+        outer_start, outer_end, inner = span
+        content_end = outer_end - 1
+        content_start = content_end - len(inner)
+        header = text[outer_start:content_start]
+        closing = text[content_end:outer_end]
+        new_inner = transform(inner)
+        return text[:outer_start] + header + new_inner + closing + text[outer_end:]
+
+    # ---- dependencias (upsert) ----
+
+    def _render_dep_line(
+        self, dialect: Dialect, config: str, dependency: Dependency, indent: str
+    ) -> str:
+        coord = f"{dependency.group_id}:{dependency.artifact_id}"
+        if dependency.version:
+            coord += f":{dependency.version}"
+        if dialect == "kotlin":
+            return f'{indent}{config}("{coord}")\n'
+        return f"{indent}{config} '{coord}'\n"
+
+    def _upsert_dep_line_in_text(
+        self,
+        text: str,
+        dialect: Dialect,
+        dependency: Dependency,
+        *,
+        config: str,
+        indent: str,
+        exclude_span: tuple[int, int] | None = None,
+    ) -> str:
+        """Substitui, dentro de `text`, a linha de dependencia existente
+        para (group_id, artifact_id) por uma nova renderizada com
+        `config`/`indent` atuais; anexa uma linha nova ao final de `text`
+        se nao encontrar nenhuma. `exclude_span` (offsets absolutos
+        dentro de `text`) pula matches que caiam dentro dele - usado para
+        nao confundir uma linha gerenciada, dentro de `constraints{}`,
+        com uma linha direta durante a busca.
+        """
+        new_line = self._render_dep_line(dialect, config, dependency, indent)
+        for match in _FULL_DEP_LINE_RE.finditer(text):
+            if exclude_span and exclude_span[0] <= match.start() < exclude_span[1]:
+                continue
+            parsed = split_coordinate(match.group("coord"))
+            if parsed is None:
+                continue
+            group_id, artifact_id, _ = parsed
+            if (
+                group_id == dependency.group_id
+                and artifact_id == dependency.artifact_id
+            ):
+                return text[: match.start()] + new_line + text[match.end() :]
+
+        if text and not text.endswith("\n"):
+            text += "\n"
+        return text + new_line
+
+    def _upsert_direct_line(
+        self, inner: str, dialect: Dialect, dependency: Dependency
+    ) -> str:
+        config = _SCOPE_TO_CONFIG.get(dependency.scope, "implementation")
+        constraints_span = find_block(inner, "constraints")
+        exclude = (
+            (constraints_span[0], constraints_span[1]) if constraints_span else None
+        )
+        return self._upsert_dep_line_in_text(
+            inner,
+            dialect,
+            dependency,
+            config=config,
+            indent="    ",
+            exclude_span=exclude,
+        )
+
+    def _upsert_managed_line(
+        self, inner: str, dialect: Dialect, dependency: Dependency
+    ) -> str:
+        def transform(constraints_inner: str) -> str:
+            return self._upsert_dep_line_in_text(
+                constraints_inner, dialect, dependency, config="api", indent="        "
+            )
+
+        new_inner = self._replace_block_content(inner, "constraints", transform)
+        if new_inner is not None:
+            return new_inner
+
+        line = self._render_dep_line(dialect, "api", dependency, "        ")
+        block = f"    constraints {{\n{line}    }}\n"
+        if inner and not inner.endswith("\n"):
+            inner += "\n"
+        return inner + block
+
+    def upsert_dependency(self, path: Path, dependency: Dependency) -> None:
+        """Adiciona ou atualiza (upsert por group_id:artifact_id) uma
+        dependencia. Gerenciada (`dependency.managed`) sempre vai para
+        dentro de `constraints{}` (criado se nao existir), config sempre
+        `api` (convencao das duas fixtures); direta vai na porcao de
+        `dependencies{}` fora de `constraints{}`, config escolhido a
+        partir de `dependency.scope` (aproximado - Gradle tem mais
+        granularidade que `DependencyScope`, mesma limitacao documentada
+        no lado de leitura em `CONFIG_TO_SCOPE`).
+        """
+        text = path.read_text()
+        dialect = self.dialect(path)
+
+        def transform(inner: str) -> str:
+            if dependency.managed:
+                return self._upsert_managed_line(inner, dialect, dependency)
+            return self._upsert_direct_line(inner, dialect, dependency)
+
+        new_text = self._replace_block_content(text, "dependencies", transform)
+        if new_text is None:
+            new_inner = transform("")
+            block = f"dependencies {{\n{new_inner}}}\n"
+            new_text = (text.rstrip("\n") + "\n\n" + block) if text.strip() else block
+
+        path.write_text(new_text)
 
     # ---- update_metadata orchestration ----
 
