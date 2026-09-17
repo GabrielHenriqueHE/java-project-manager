@@ -29,9 +29,22 @@ Mapeamento config→scope: `implementation`/`api`→`compile`, `compileOnly`/`an
 
 `detect_directory_structure`/`STANDARD_DIRS` foram extraídos de `manager.adapters.maven.directory` para `manager.adapters.common.directory` (a convenção `src/main/java` etc. é idêntica entre o plugin `java` do Gradle e o Maven — não é uma convenção "do Maven" que o Gradle por acaso também segue, é a convenção-padrão do ecossistema Java que ambas as build tools adotam por default). `maven/directory.py` e `gradle/directory.py` reexportam de lá; `merge_registered_directories` (ligado ao `build-helper-maven-plugin`) continua exclusivo do Maven.
 
+## Escrita: `GradleWriter`
+
+Todas as mutações (Fases 16-23) passam por `GradleWriter` (`manager/adapters/gradle/writer.py`), que aplica edições textuais cirúrgicas em vez de reconstruir o arquivo inteiro — mesmo objetivo de "minimizar o diff" do `MavenPomWriter`, mas sem uma árvore de sintaxe real por baixo (decisão da Fase 15, mantida). Dois mecanismos sustentam isso:
+
+1. **Gramática compartilhada com o parser**: `find_block`, `CONFIG_NAMES`, `CONFIG_TO_SCOPE`, `split_coordinate`, `DEP_LINE_RE`, `PLUGIN_ID_RE`, `ROOT_NAME_RE`, `INCLUDE_RE`, `QUOTED_RE` (`gradle/parser.py`) são públicos desde a Fase 17 justamente para o writer reaproveitá-los — o texto que o writer produz é sempre parseável de volta pela mesma gramática que o lê, por construção.
+2. **Decomposição recursiva de blocos aninhados** (`_replace_block_content`, Fase 18): isola o conteúdo de um bloco `nome { ... }`, aplica uma transformação pura sobre essa substring, remonta cabeçalho+conteúdo+fechamento. Como a transformação só enxerga uma substring independente, ela pode chamar `_replace_block_content` de novo para tratar um bloco *dentro* dela (ex.: `constraints{}` dentro de `dependencies{}`) sem nenhuma aritmética de offset absoluto. Remoção com colapso em cascata (Fases 19/20) faz a mesma decomposição manualmente, já que precisa saber se algo mudou e redecidir a forma do bloco depois do fato — algo que uma transformação pura `str -> str` não expressa.
+
+Um bug real surgiu exatamente na borda desse mecanismo: a regex usada para localizar/substituir uma linha de dependência inteira (`_FULL_DEP_LINE_RE`) tinha, na cauda, um `\s*` que atravessa `\n` — o primeiro match de um bloco com 2+ entradas engolia a quebra de linha e a indentação da entrada seguinte, impedindo que ela fosse encontrada em buscas subsequentes. Só apareceu na Fase 22 (`remove_module` removendo a *segunda* entrada de `constraints{}` do BOM), porque nenhum teste anterior buscava especificamente uma entrada que não fosse a primeira/única de um bloco. Corrigido trocando os `\s*` da cauda por `[ \t]*` (só espaço/tab da mesma linha).
+
+## `sourceSets{}`: por que não foi implementado
+
+`register_directory_role`/`unregister_directory_role` (o par que, no Maven, escreve/lê `build-helper-maven-plugin`) permanecem stub. O equivalente conceitual no Gradle é `sourceSets{}` (ex.: `sourceSets { main { java { srcDirs += 'src/main/proto' } } }`), mas ao contrário do `build-helper-maven-plugin` — uma dependência declarativa, sempre no mesmo formato — `sourceSets{}` é um bloco de configuração Groovy/Kotlin genuinamente mais livre (métodos encadeados, `+=` vs. `srcDir(...)`, múltiplas formas idiomáticas de expressar a mesma coisa), o que o afastaria do "subconjunto convencional, sem crash em código incomum" que sustenta todo o parser desde a Fase 15. Implementar escrita para `sourceSets{}` exigiria ler de volta um subconjunto bem mais amplo do que o hoje suportado, para não arriscar corromper builds reais com formas menos comuns do bloco. Ficou de fora desde o requirements da feature (não é uma "próxima fatia", é um limite permanente) — revisitar exigiria justificativa nova, não uma continuação natural do trabalho já feito.
+
 ## Impacto na camada Textual
 
-Nenhum — todos os painéis já operam sobre o modelo de domínio genérico. `ImportProjectScreen`/`CloneProjectScreen` já usavam `detect_adapter` (agnóstico); passam a funcionar para Gradle sem nenhuma mudança de código, só por `GradleAdapter` estar registrado.
+Nenhum — nem para leitura, nem para as mutações das Fases 16-23. Todos os painéis e telas de mutação (formulários de metadados/dependência/módulo, os bindings do Painel [5]) já chamam a interface `BuildToolAdapter` genericamente, sem ramificação por build tool; `ImportProjectScreen`/`CloneProjectScreen` já usavam `detect_adapter` (agnóstico). Um projeto Gradle passou a suportar cada mutação assim que o método correspondente deixou de ser stub — nenhuma tela precisou de nenhuma mudança de código em nenhuma das nove fatias.
 
 ## Alternativas consideradas e descartadas
 

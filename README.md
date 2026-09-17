@@ -1,6 +1,6 @@
 # Java Project Manager (jpm)
 
-Aplicação TUI para gerenciar projetos Java (criação, metadados, módulos, estrutura de diretórios) de forma independente da build tool utilizada. Maven tem suporte completo (leitura + escrita); Gradle (Groovy e Kotlin DSL) tem suporte de leitura/navegação e de estrutura de diretórios, com as demais mutações ainda pendentes.
+Aplicação TUI para gerenciar projetos Java (criação, metadados, módulos, estrutura de diretórios) de forma independente da build tool utilizada. Maven e Gradle (Groovy e Kotlin DSL) têm suporte completo (leitura + escrita); a única exceção é o registro de diretório customizado no build (`sourceSets{}`), fora de escopo para o Gradle.
 
 Veja `specs/00-overview.md` para o contexto completo do produto, o glossário e o log de decisões arquiteturais. O desenvolvimento segue um fluxo de Spec-Driven Development leve, documentado em `specs/`.
 
@@ -49,6 +49,13 @@ uv run pytest
 - **Fase 13 — Clonar Repositório Remoto** (concluída): `g` no Painel [1] clona um repositório via `git clone` (requer `git` instalado no sistema) e registra o projeto resultante, reaproveitando o mesmo fluxo de detecção/inferência do import de um path local.
 - **Fase 14 — Remover Dependência Direta na TUI** (concluída): `r` no Painel [4] remove uma dependência direta (`managed=False`) do módulo selecionado, identificada por `groupId:artifactId` num formulário dedicado.
 - **Fase 15 — Gradle: Fundação (Leitura)** (concluída): novo `GradleAdapter` (`detect`/`infer_structure`), suportando Groovy (`build.gradle`) e Kotlin DSL (`build.gradle.kts`). Projetos Gradle já podem ser importados/clonados e navegados na TUI existente — nenhum painel mudou. Mutações (criar módulo, editar dependência, etc.) ainda são stubs, pendentes de fatias futuras.
-- **Fase 16 — Gradle: Diretórios** (concluída): `add_directory`/`remove_directory` implementados no `GradleAdapter` — a única mutação que não exige editar `build.gradle(.kts)`, já que diretórios-padrão são reconhecidos por convenção. Painel [5] ESTRUTURA já funciona para projetos Gradle sem nenhuma mudança de código. As demais mutações Gradle continuam pendentes.
+- **Fase 16 — Gradle: Diretórios** (concluída): `add_directory`/`remove_directory` implementados no `GradleAdapter` — a única mutação que não exige editar `build.gradle(.kts)`, já que diretórios-padrão são reconhecidos por convenção. Painel [5] ESTRUTURA já funciona para projetos Gradle sem nenhuma mudança de código.
+- **Fase 17 — Gradle: Metadados** (concluída): `update_metadata` — primeira mutação que edita `build.gradle(.kts)` como texto. Novo `GradleWriter`, edição textual cirúrgica reaproveitando a mesma gramática do parser.
+- **Fase 18 — Gradle: Dependências** (concluída): `update_dependency` (upsert direta/gerenciada), com decomposição recursiva de blocos aninhados (`constraints{}` dentro de `dependencies{}`).
+- **Fase 19 — Gradle: Remover Dependência Gerenciada** (concluída): `remove_dependency`, com colapso em cascata de `constraints{}`/`dependencies{}` quando ficam vazios.
+- **Fase 20 — Gradle: Remover Dependência Direta** (concluída): `remove_direct_dependency`, mesmo colapso só na porção direta.
+- **Fase 21 — Gradle: Adicionar Módulo** (concluída): `add_module` cria um `build.gradle(.kts)` novo e registra em `include(...)` no `settings.gradle(.kts)`. Só filhos diretos da raiz (árvore Gradle é achatada por design).
+- **Fase 22 — Gradle: Remover Módulo** (concluída): `remove_module`, espelhando o Maven (conflito de dependentes, BOM, dependentes diretos).
+- **Fase 23 — Gradle: Criar Projeto** (concluída, fecha as mutações Gradle em escopo): `create_project` materializa um projeto Gradle inteiro a partir de um `ModuleManifest` (sempre Groovy). Únicas mutações Gradle que continuam fora de escopo: `register_directory_role`/`unregister_directory_role` (`sourceSets{}`), permanentemente — não são fatias pendentes.
 
 Detalhes de escopo e checklist de cada fase em `specs/phases/`.
