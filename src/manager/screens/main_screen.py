@@ -27,6 +27,7 @@ from manager.screens.widgets.remove_dependency_form import RemoveDependencyFormS
 from manager.screens.widgets.directory_form import DirectoryFormScreen
 from manager.screens.widgets.metadata_form import MetadataFormScreen
 from manager.screens.widgets.metadata_panel import MetadataPanel
+from manager.screens.widgets.duplicate_module_form import DuplicateModuleFormScreen
 from manager.screens.widgets.module_form import ModuleFormScreen
 from manager.screens.widgets.modules_panel import ModulesPanel
 from manager.screens.widgets.panel import Panel
@@ -260,6 +261,30 @@ class MainScreen(Screen):
             self.set_project(updated)
 
         _do_remove(force=False)
+
+    def duplicate_module(self, module: Module) -> None:
+        if self.project is None or self._adapter is None:
+            self.notify("Nenhum projeto selecionado", severity="error")
+            return
+
+        def _on_submit(result: dict | None) -> None:
+            if not result:
+                return
+            try:
+                updated = self._adapter.duplicate_module(
+                    self.project,
+                    module.name,
+                    result["new_name"],
+                    group_id=result["group_id"],
+                    version=result["version"],
+                )
+            except ValueError as exc:
+                self.notify(str(exc), severity="error")
+                return
+            self.notify(f"Modulo '{module.name}' duplicado para '{result['new_name']}'")
+            self.set_project(updated)
+
+        self.app.push_screen(DuplicateModuleFormScreen(module.name), _on_submit)
 
     def update_metadata(self, module: Module) -> None:
         if self.project is None or self._adapter is None:

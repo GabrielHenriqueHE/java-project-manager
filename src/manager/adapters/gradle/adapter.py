@@ -6,6 +6,7 @@ from manager.adapters.base import (
     DependentModuleConflict,
     DirectoryNotEmptyConflict,
 )
+from manager.adapters.common.copy import copy_module_tree
 from manager.adapters.common.lookup import (
     find_bom_module,
     find_dependents,
@@ -380,6 +381,71 @@ class GradleAdapter(BuildToolAdapter):
             self._writer.remove_dependency(dependent_path, group_id, artifact_id)
 
         return self.infer_structure(root_path)
+
+    def duplicate_module(
+        self,
+        project: Project,
+        source_module_name: str,
+        new_module_name: str,
+        *,
+        parent_name: str | None = None,
+        group_id: str | None = None,
+        version: str | None = None,
+    ) -> Project:
+        settings_path = find_settings_file(project.root_path)
+        if settings_path is None:
+            raise ValueError(
+                f"Projeto nao tem settings.gradle(.kts) em '{project.root_path}'"
+            )
+
+        source = find_module(project.root_module, source_module_name)
+        if source is None:
+            raise ValueError(
+                f"Modulo fonte '{source_module_name}' nao encontrado no projeto"
+            )
+        if source.submodules:
+            raise ValueError(
+                f"Modulo '{source_module_name}' tem submodulos; duplicar nao e "
+                "suportado"
+            )
+
+        if parent_name is not None:
+            parent = find_module(project.root_module, parent_name)
+            if parent is None:
+                raise ValueError(
+                    f"Modulo pai '{parent_name}' nao encontrado no projeto"
+                )
+            if parent.relative_path != project.root_module.relative_path:
+                raise ValueError(
+                    "Gradle so suporta modulos filhos diretos da raiz nesta "
+                    f"fase; '{parent_name}' nao e a raiz"
+                )
+
+        if find_module(project.root_module, new_module_name) is not None:
+            raise ValueError(
+                f"Ja existe um modulo chamado '{new_module_name}' no projeto"
+            )
+
+        module_dir = project.root_path / new_module_name
+        if module_dir.exists():
+            raise ValueError(f"O diretorio '{module_dir}' ja existe")
+
+        source_dir = project.root_path / source.relative_path
+        copy_module_tree(source_dir, module_dir)
+        self._writer.add_include(settings_path, new_module_name)
+
+        result = self.infer_structure(project.root_path)
+        if group_id is not None or version is not None:
+            new_module = find_module(result.root_module, new_module_name)
+            overridden = new_module.metadata.model_copy(
+                update={
+                    "group_id": group_id if group_id is not None else new_module.metadata.group_id,
+                    "version": version if version is not None else new_module.metadata.version,
+                }
+            )
+            result = self.update_metadata(result, new_module_name, overridden)
+
+        return result
 
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency

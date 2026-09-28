@@ -8,6 +8,7 @@ from manager.adapters.base import (
     DependentModuleConflict,
     DirectoryNotEmptyConflict,
 )
+from manager.adapters.common.copy import copy_module_tree
 from manager.adapters.common.lookup import (
     find_bom_module,
     find_dependents,
@@ -219,6 +220,92 @@ class MavenAdapter(BuildToolAdapter):
             self._writer.remove_dependency(dependent_pom, group_id, artifact_id)
 
         return self.infer_structure(root_path)
+
+    def duplicate_module(
+        self,
+        project: Project,
+        source_module_name: str,
+        new_module_name: str,
+        *,
+        parent_name: str | None = None,
+        group_id: str | None = None,
+        version: str | None = None,
+    ) -> Project:
+        root_path = project.root_path
+
+        source = self._find_module(project.root_module, source_module_name)
+        if source is None:
+            raise ValueError(
+                f"Modulo fonte '{source_module_name}' nao encontrado no projeto"
+            )
+        if source.submodules:
+            raise ValueError(
+                f"Modulo '{source_module_name}' tem submodulos; duplicar nao e "
+                "suportado"
+            )
+
+        original_parent = self._find_parent(project.root_module, source)
+        if parent_name is None:
+            parent = original_parent or project.root_module
+        else:
+            parent = self._find_module(project.root_module, parent_name)
+            if parent is None:
+                raise ValueError(
+                    f"Modulo pai '{parent_name}' nao encontrado no projeto"
+                )
+
+        if parent.metadata.packaging != "pom":
+            raise ValueError(
+                f"Modulo pai '{parent.name}' precisa ter packaging 'pom' para "
+                "receber novos modulos"
+            )
+
+        if self._find_module(project.root_module, new_module_name) is not None:
+            raise ValueError(
+                f"Ja existe um modulo chamado '{new_module_name}' no projeto"
+            )
+
+        parent_dir = root_path / parent.relative_path
+        module_dir = parent_dir / new_module_name
+        if module_dir.exists():
+            raise ValueError(f"O diretorio '{module_dir}' ja existe")
+
+        source_dir = root_path / source.relative_path
+        copy_module_tree(source_dir, module_dir)
+
+        dest_pom = module_dir / "pom.xml"
+        self._writer.set_artifact_id(dest_pom, new_module_name)
+
+        reparenting = (
+            original_parent is None
+            or original_parent.relative_path != parent.relative_path
+        )
+        if reparenting:
+            self._writer.set_parent(
+                dest_pom,
+                group_id=parent.metadata.group_id or "",
+                artifact_id=parent.metadata.artifact_id,
+                version=parent.metadata.version or "",
+            )
+
+        parent_pom = root_path / parent.build_file.path
+        if not self._writer.add_module_entry(parent_pom, new_module_name):
+            raise ValueError(
+                f"O pom de '{parent.name}' nao possui uma secao <modules> existente"
+            )
+
+        result = self.infer_structure(root_path)
+        if group_id is not None or version is not None:
+            new_module = self._find_module(result.root_module, new_module_name)
+            overridden = new_module.metadata.model_copy(
+                update={
+                    "group_id": group_id if group_id is not None else new_module.metadata.group_id,
+                    "version": version if version is not None else new_module.metadata.version,
+                }
+            )
+            result = self.update_metadata(result, new_module_name, overridden)
+
+        return result
 
     def add_directory(
         self, project: Project, module_name: str, relative_path: Path

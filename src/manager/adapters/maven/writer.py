@@ -169,6 +169,42 @@ class MavenPomWriter:
         depth = sum(1 for _ in dep_el.iterancestors())
         etree.indent(dep_el, space="  ", level=depth)
 
+    def set_artifact_id(self, pom_path: Path, artifact_id: str) -> None:
+        """Sobrescreve <artifactId> de um pom.xml ja existente.
+
+        Usado exclusivamente por duplicate_module para batizar a copia
+        recem-criada de um modulo - NAO exposto via update_metadata, que
+        continua recusando renomear artifactId de um modulo ja existente
+        (aqui o modulo acabou de nascer, nao esta sendo renomeado).
+        """
+        tree, root, ns = self._parse(pom_path)
+        ensure_child_in_order(root, "artifactId", ns).text = artifact_id
+        self._write(tree, pom_path)
+
+    def set_parent(
+        self, pom_path: Path, *, group_id: str, artifact_id: str, version: str
+    ) -> None:
+        """Sobrescreve (ou cria) o bloco <parent> de um pom.xml ja existente.
+
+        Usado exclusivamente por duplicate_module quando parent_name aponta
+        para um pai diferente do pai original do modulo fonte - o <parent>
+        copiado literalmente ainda referencia o GAV do pai antigo.
+        """
+        tree, root, ns = self._parse(pom_path)
+        existing = root.find(f"{ns}parent")
+        if existing is not None:
+            remove_element_preserving_whitespace(existing)
+
+        parent_el = ensure_child_in_order(root, "parent", ns)
+        for tag, value in (
+            ("groupId", group_id),
+            ("artifactId", artifact_id),
+            ("version", version),
+        ):
+            etree.SubElement(parent_el, f"{ns}{tag}").text = value
+
+        self._write(tree, pom_path)
+
     def update_metadata(
         self,
         pom_path: Path,

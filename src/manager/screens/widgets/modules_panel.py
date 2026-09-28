@@ -32,6 +32,7 @@ class ModulesPanel(Panel):
     BINDINGS = [
         ("n", "add_module", "novo"),
         ("d", "remove_module", "remover"),
+        ("c", "duplicate_module", "duplicar"),
         ("j", "cursor_down", "mover"),
         ("k", "cursor_up", "mover"),
     ]
@@ -110,3 +111,9 @@ class ModulesPanel(Panel):
         module = self.module_at(index)
         if module is not None:
             self.screen.remove_module(module)
+
+    def action_duplicate_module(self) -> None:
+        index = self.query_one("#modules-list", ListView).index
+        module = self.module_at(index)
+        if module is not None:
+            self.screen.duplicate_module(module)

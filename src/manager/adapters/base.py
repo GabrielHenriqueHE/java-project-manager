@@ -81,6 +81,44 @@ class BuildToolAdapter(ABC):
         """
 
     @abstractmethod
+    def duplicate_module(
+        self,
+        project: Project,
+        source_module_name: str,
+        new_module_name: str,
+        *,
+        parent_name: str | None = None,
+        group_id: str | None = None,
+        version: str | None = None,
+    ) -> Project:
+        """Cria new_module_name copiando toda a arvore de arquivos do modulo
+        source_module_name (codigo-fonte, resources, e o proprio arquivo de
+        build), ignorando saida de build/VCS/IDE, e registra o novo modulo
+        no build file do pai envolvido - analogo a add_module, mas usando um
+        modulo-fonte real como template em vez de materializar diretorios
+        vazios.
+
+        parent_name=None (default) usa o MESMO pai de source_module_name -
+        duplicar cria um "irmao" do modulo fonte. Um parent_name explicito
+        sobrescreve esse default com as mesmas regras de add_module.
+
+        group_id/version, se None (default), sao herdados exatamente como
+        estavam no modulo fonte. Se informados, sobrescrevem apenas o novo
+        modulo (reaproveitando o mesmo caminho de update_metadata). O
+        artifactId (Maven) e sempre = new_module_name; Gradle nao tem
+        artifactId no build.gradle(.kts), a identidade e o nome do
+        include(...) em settings.gradle(.kts).
+
+        Nao reescreve conteudo Java/Kotlin nem remove nada da copia - poda
+        manual e trabalho do usuario depois (fora de escopo).
+
+        Levanta ValueError se: source_module_name nao existir; tiver
+        submodulos (duplicar arvores aninhadas fora de escopo); new_module_name
+        ja existir ou for igual a source_module_name; o diretorio de destino
+        ja existir em disco; parent_name invalido (mesmas regras de add_module).
+        """
+
+    @abstractmethod
     def update_dependency(
         self, project: Project, module_name: str, dependency: Dependency
     ) -> Project:
